@@ -14,7 +14,7 @@ const api = axios.create({
 // Request interceptor to add token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('adminToken');
+    const token = sessionStorage.getItem('adminToken');
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -31,8 +31,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       // Token expired or invalid
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('adminData');
+      sessionStorage.removeItem('adminToken');
+      sessionStorage.removeItem('adminData');
       window.location.href = '/admin/login';
     }
     return Promise.reject(error);
@@ -76,8 +76,8 @@ const AuthAdmin = {
 
       if (response.data.success && response.data.token) {
         // Store token and admin data
-        localStorage.setItem('token', response.data.token);  // ✅
-        localStorage.setItem('user', JSON.stringify(response.data.admin));  // ✅
+        sessionStorage.setItem('token', response.data.token);  // ✅
+        sessionStorage.setItem('user', JSON.stringify(response.data.admin));  // ✅
       }
 
       return response.data;
@@ -104,8 +104,8 @@ const AuthAdmin = {
       });
 
       if (response.data.success && response.data.token) {
-        localStorage.setItem('adminToken', response.data.token);
-        localStorage.setItem('adminData', JSON.stringify(response.data.admin));
+        sessionStorage.setItem('adminToken', response.data.token);
+        sessionStorage.setItem('adminData', JSON.stringify(response.data.admin));
       }
 
       return response.data;
@@ -120,7 +120,7 @@ const AuthAdmin = {
   // Get current admin data
   getCurrentAdmin(): AdminData | null {
     try {
-      const adminData = localStorage.getItem('adminData');
+      const adminData = sessionStorage.getItem('adminData');
       return adminData ? JSON.parse(adminData) : null;
     } catch {
       return null;
@@ -129,12 +129,12 @@ const AuthAdmin = {
 
   // Get admin token
   getToken(): string | null {
-    return localStorage.getItem('adminToken');
+    return sessionStorage.getItem('adminToken');
   },
 
   // Check if admin is authenticated
   isAuthenticated(): boolean {
-    const token = localStorage.getItem('adminToken');
+    const token = sessionStorage.getItem('adminToken');
     if (!token) return false;
 
     // Check token expiration (basic check)
@@ -152,7 +152,7 @@ const AuthAdmin = {
       const response = await api.get<ApiResponse>('/profile');
       if (response.data.success) {
         // Update local storage with fresh data
-        localStorage.setItem('adminData', JSON.stringify(response.data.data));
+        sessionStorage.setItem('adminData', JSON.stringify(response.data.data));
         return response.data.data;
       }
       throw new Error('Failed to fetch profile');
@@ -191,7 +191,7 @@ const AuthAdmin = {
         // Update local storage
         const currentData = this.getCurrentAdmin();
         const updatedData = { ...currentData, ...response.data.data };
-        localStorage.setItem('adminData', JSON.stringify(updatedData));
+        sessionStorage.setItem('adminData', JSON.stringify(updatedData));
       }
       return response.data;
     } catch (error: any) {
@@ -211,8 +211,8 @@ const AuthAdmin = {
       });
     } finally {
       // Always clear local storage
-      localStorage.removeItem('adminToken');
-      localStorage.removeItem('adminData');
+      sessionStorage.removeItem('adminToken');
+      sessionStorage.removeItem('adminData');
       window.location.href = '/admin/login';
     }
   },

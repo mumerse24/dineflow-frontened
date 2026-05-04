@@ -53,7 +53,7 @@ const initialState: RiderState = {
     profile: null,
     isLoading: false,
     error: null,
-    isAuthenticated: !!localStorage.getItem("riderToken"),
+    isAuthenticated: !!sessionStorage.getItem("riderToken"),
 }
 
 export const fetchRiderOrders = createAsyncThunk(

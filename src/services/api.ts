@@ -7,8 +7,8 @@ const getDynamicApiUrl = () => {
   if (typeof window === 'undefined') return import.meta.env.VITE_API_URL || localFallback;
 
   // Check for any legacy overrides and clear them
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('VITE_API_URL_OVERRIDE');
+  if (typeof sessionStorage !== 'undefined') {
+    sessionStorage.removeItem('VITE_API_URL_OVERRIDE');
   }
 
   const envUrl = import.meta.env.VITE_API_URL;
@@ -48,17 +48,18 @@ api.interceptors.request.use(
     let token = null;
     if (typeof window !== 'undefined') {
       if (window.location.pathname.startsWith('/admin')) {
-        token = localStorage.getItem("adminToken");
+        token = sessionStorage.getItem("adminToken");
       } else if (window.location.pathname.startsWith('/rider')) {
-        token = localStorage.getItem("riderToken");
+        token = sessionStorage.getItem("riderToken");
       } else {
-        token = localStorage.getItem("token");
+        token = sessionStorage.getItem("token");
       }
     }
 
-    // Fallback if specific token not found
+    // Fallback logic removed to prevent session bleeding across paths
     if (!token) {
-      token = localStorage.getItem("adminToken") || localStorage.getItem("token") || localStorage.getItem("riderToken");
+      // Return config without token to treat as guest on this path
+      return config;
     }
 
     if (token) {
@@ -72,7 +73,7 @@ api.interceptors.request.use(
       // 💡 ONLY warn if it's NOT a login or signup request
       const isPublicRoute = config.url?.includes('/auth/login') || config.url?.includes('/auth/register') || config.url?.includes('/riders/login');
       if (!isPublicRoute && process.env.NODE_ENV === 'development') {
-        console.warn("⚠️ No authentication token found in localStorage")
+        console.warn("⚠️ No authentication token found in sessionStorage")
       }
     }
 
@@ -115,7 +116,7 @@ api.interceptors.response.use(
       console.error("❌ MENU ADD ERROR - Detailed Analysis:")
 
       // Check if user is authenticated
-      const token = localStorage.getItem("token") || localStorage.getItem("adminToken")
+      const token = sessionStorage.getItem("token") || sessionStorage.getItem("adminToken")
       if (!token) {
         console.error("❌ No authentication token found")
         toast.error("You must be logged in as admin to add menu items")
@@ -190,13 +191,13 @@ api.interceptors.response.use(
         }
 
         // Clear all authentication data thoroughly
-        localStorage.removeItem("token")
-        localStorage.removeItem("user")
-        localStorage.removeItem("adminToken")
-        localStorage.removeItem("adminUser")
-        localStorage.removeItem("adminData")
-        localStorage.removeItem("riderToken")
-        localStorage.removeItem("loginTime")
+        sessionStorage.removeItem("token")
+        sessionStorage.removeItem("user")
+        sessionStorage.removeItem("adminToken")
+        sessionStorage.removeItem("adminUser")
+        sessionStorage.removeItem("adminData")
+        sessionStorage.removeItem("riderToken")
+        sessionStorage.removeItem("loginTime")
 
         // Remove auth header from axios defaults
         delete api.defaults.headers.common.Authorization
@@ -265,24 +266,24 @@ api.interceptors.response.use(
 
 // ✅ Helper function to set token manually
 export const setAuthToken = (token: string) => {
-  localStorage.setItem("token", token)
+  sessionStorage.setItem("token", token)
   api.defaults.headers.common.Authorization = `Bearer ${token}`
   console.log("🔧 Authentication token set")
 }
 
 // ✅ Helper function to set admin token specifically
 export const setAdminToken = (token: string) => {
-  localStorage.setItem("adminToken", token)
+  sessionStorage.setItem("adminToken", token)
   api.defaults.headers.common.Authorization = `Bearer ${token}`
   console.log("🔧 Admin authentication token set")
 }
 
 // ✅ Helper function to clear all auth data
 export const clearAuth = () => {
-  localStorage.removeItem("token")
-  localStorage.removeItem("user")
-  localStorage.removeItem("adminToken")
-  localStorage.removeItem("adminUser")
+  sessionStorage.removeItem("token")
+  sessionStorage.removeItem("user")
+  sessionStorage.removeItem("adminToken")
+  sessionStorage.removeItem("adminUser")
   delete api.defaults.headers.common.Authorization
   console.log("🔧 Authentication cleared")
 }
@@ -291,18 +292,18 @@ export const clearAuth = () => {
 export const isAuthenticated = () => {
   if (typeof window !== 'undefined') {
     if (window.location.pathname.startsWith('/admin')) {
-      return !!localStorage.getItem("adminToken");
+      return !!sessionStorage.getItem("adminToken");
     } else if (window.location.pathname.startsWith('/rider')) {
-      return !!localStorage.getItem("riderToken");
+      return !!sessionStorage.getItem("riderToken");
     }
   }
-  const token = localStorage.getItem("token") || localStorage.getItem("adminToken");
+  const token = sessionStorage.getItem("token") || sessionStorage.getItem("adminToken");
   return !!token
 }
 
 // ✅ Helper to check if admin is authenticated
 export const isAdminAuthenticated = () => {
-  const token = localStorage.getItem("adminToken")
+  const token = sessionStorage.getItem("adminToken")
   return !!token
 }
 
@@ -310,17 +311,17 @@ export const isAdminAuthenticated = () => {
 export const getCurrentToken = () => {
   if (typeof window !== 'undefined') {
     if (window.location.pathname.startsWith('/admin')) {
-      return localStorage.getItem("adminToken");
+      return sessionStorage.getItem("adminToken");
     } else if (window.location.pathname.startsWith('/rider')) {
-      return localStorage.getItem("riderToken");
+      return sessionStorage.getItem("riderToken");
     }
   }
-  return localStorage.getItem("token") || localStorage.getItem("adminToken");
+  return sessionStorage.getItem("token") || sessionStorage.getItem("adminToken");
 }
 
 // ✅ Helper to get admin token
 export const getAdminToken = () => {
-  return localStorage.getItem("adminToken")
+  return sessionStorage.getItem("adminToken")
 }
 
 // ✅ Helper to validate token format

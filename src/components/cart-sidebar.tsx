@@ -170,9 +170,16 @@ export function CartSidebar() {
         <div className="px-6 py-6 border-b border-orange-50 flex items-center justify-between bg-white sticky top-0 z-10">
           <div className="flex flex-col">
             <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Your Cart</h2>
-            <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest mt-0.5">
-              {totalItems} {totalItems === 1 ? 'Item' : 'Items'} Selected
-            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-[10px] font-bold text-orange-500 uppercase tracking-widest">
+                {totalItems} {totalItems === 1 ? 'Item' : 'Items'} Selected
+              </p>
+              {cartState.orderType === 'dine-in' && (
+                <Badge className="bg-amber-100 text-amber-600 border-amber-200 text-[8px] font-black uppercase tracking-widest h-4 px-1.5 py-0">
+                  Dine-In Mode
+                </Badge>
+              )}
+            </div>
           </div>
           <button 
             onClick={() => setSheetOpen(false)}

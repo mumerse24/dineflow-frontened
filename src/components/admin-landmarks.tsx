@@ -52,7 +52,7 @@ export function AdminLandmarks() {
 
         setSaving(true)
         try {
-            const token = localStorage.getItem("adminToken")
+            const token = sessionStorage.getItem("adminToken")
             const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {}
 
             const res = await api.post("/landmarks", {
@@ -76,7 +76,7 @@ export function AdminLandmarks() {
         if (!window.confirm("Are you sure you want to permanently delete this landmark?")) return
 
         try {
-            const token = localStorage.getItem("adminToken")
+            const token = sessionStorage.getItem("adminToken")
             const config = token ? { headers: { Authorization: `Bearer ${token}` } } : {}
             const res = await api.delete(`/landmarks/${id}`, config)
             if (res.data.success) {

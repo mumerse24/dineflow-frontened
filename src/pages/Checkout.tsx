@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { useAppSelector, useAppDispatch } from "@/store/hooks"
-import { clearCart, clearCartServer } from "@/store/slices/cartSlice"
+import { clearCart, clearCartServer, setOrderType } from "@/store/slices/cartSlice"
 import { getProfile } from "@/store/thunks/authThunks"
 import { toast } from "sonner"
-import { ArrowLeft, CreditCard, Wallet, MapPin, CheckCircle, Bike, ShoppingBag, UtensilsCrossed, Lock } from "lucide-react"
+import { ArrowLeft, CreditCard, Wallet, MapPin, CheckCircle, Bike, ShoppingBag, UtensilsCrossed, Lock, Calendar, Clock, Users, Plus, Minus, CheckCircle2, AlertCircle, Building2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import api from "@/services/api"
 import { loadStripe } from "@stripe/stripe-js"
 import { Elements, CardElement, useStripe, useElements } from "@stripe/react-stripe-js"
+import { Select } from "@/components/ui/select"
 
 // Load Stripe outside of component render to avoid re-creation
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY)
@@ -35,6 +36,7 @@ const CARD_ELEMENT_OPTIONS = {
 
 
 function CheckoutPageInner() {
+  const location = useLocation()
   const navigate = useNavigate()
   const dispatch = useAppDispatch()
   const stripe = useStripe()
@@ -43,11 +45,60 @@ function CheckoutPageInner() {
   const { user } = useAppSelector((state) => state.auth)
   const [loading, setLoading] = useState(false)
 
+  // Get restaurantId from cart or location state (for reservation-only mode)
+  const restaurantId = cart.restaurantId || location.state?.restaurantId
+
   // Loyalty Points State
   const [pointsToRedeem, setPointsToRedeem] = useState(0)
   const availablePoints = user?.loyaltyPoints || 0
   const [saveAddress, setSaveAddress] = useState(false)
   const [addressName, setAddressName] = useState("")
+
+  interface CheckoutFormData {
+    fullName: string
+    phone: string
+    address: string
+    city: string
+    deliveryInstructions: string
+    paymentMethod: string
+    deliveryTime: string
+    orderType: "delivery" | "pickup" | "dine-in"
+    mobileNumber: string
+    cardNumber: string
+    expiryDate: string
+    cvv: string
+    cardName: string
+    tableNumber: string
+    reservationDate: string
+    reservationTime: string
+    peopleCount: number
+    pickupTime: string
+    coordinates: { lat: number; lng: number } | null
+  }
+
+  // Form state
+  const [formData, setFormData] = useState<CheckoutFormData>({
+    fullName: "",
+    phone: "",
+    address: "",
+    city: "",
+    deliveryInstructions: "",
+    paymentMethod: "cash",
+    deliveryTime: "30",
+    orderType: cart.orderType || (location.state?.orderType as any) || "delivery",
+    // ✅ NEW FIELDS FOR PAYMENTS
+    mobileNumber: "", // For JazzCash/EasyPaisa
+    cardNumber: "",
+    expiryDate: "",
+    cvv: "",
+    cardName: "",
+    tableNumber: "", // For Dine-in
+    reservationDate: new Date().toISOString().split('T')[0],
+    reservationTime: "19:00",
+    peopleCount: 2,
+    pickupTime: "",
+    coordinates: null,
+  })
 
   useEffect(() => {
     dispatch(getProfile())
@@ -72,27 +123,10 @@ function CheckoutPageInner() {
     }
   }, [dispatch])
 
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, orderType: cart.orderType }))
+  }, [cart.orderType])
 
-  // Form state
-  // OLD (replace with this):
-  const [formData, setFormData] = useState({
-    fullName: "",
-    phone: "",
-    address: "",
-    city: "",
-    deliveryInstructions: "",
-    paymentMethod: "cash",
-    deliveryTime: "30",
-    orderType: "delivery", // 'delivery' | 'pickup' | 'dine-in'
-    // ✅ NEW FIELDS FOR PAYMENTS
-    mobileNumber: "", // For JazzCash/EasyPaisa
-    cardNumber: "",
-    expiryDate: "",
-    cvv: "",
-    cardName: "",
-    tableNumber: "", // For Dine-in
-    coordinates: null as { lat: number; lng: number } | null,
-  })
 
   // Order type options
   const orderTypes = [
@@ -158,6 +192,43 @@ function CheckoutPageInner() {
 
   const dynamicETA = computeDynamicETA();
 
+  const [availability, setAvailability] = useState<{ isAvailable: boolean, availableTables: number } | null>(null)
+  const [checkingAvailability, setCheckingAvailability] = useState(false)
+
+  const timeSlots = [
+    "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00", "21:00", "22:00"
+  ]
+
+  // Check availability when date/time/restaurant changes
+  useEffect(() => {
+    const checkAvailability = async () => {
+      if (formData.orderType === "dine-in" && restaurantId) {
+        setCheckingAvailability(true)
+        try {
+          const dateTime = `${formData.reservationDate}T${formData.reservationTime}`
+          const response = await api.get(`/orders/availability/${restaurantId}`, {
+            params: { dateTime, peopleCount: formData.peopleCount }
+          })
+          if (response.data.success) {
+            setAvailability({
+              isAvailable: response.data.isAvailable,
+              availableTables: response.data.availableTables
+            })
+          }
+        } catch (error) {
+          console.error("Failed to check availability:", error)
+        } finally {
+          setCheckingAvailability(false)
+        }
+      } else {
+        setAvailability(null)
+      }
+    }
+
+    const timer = setTimeout(checkAvailability, 500)
+    return () => clearTimeout(timer)
+  }, [formData.reservationDate, formData.reservationTime, formData.peopleCount, formData.orderType, restaurantId])
+
   // Handle form input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -216,18 +287,38 @@ function CheckoutPageInner() {
         return
       }
     }
-    if (cart.items.length === 0) {
-      toast.error("Your cart is empty!")
-      return
+
+    if (formData.orderType === "dine-in") {
+      if (!formData.reservationDate) {
+        toast.error("Please select a reservation date")
+        return
+      }
+      if (!formData.reservationTime) {
+        toast.error("Please select a reservation time")
+        return
+      }
+      if (formData.peopleCount < 1) {
+        toast.error("Please select at least 1 person")
+        return
+      }
+      if (availability && !availability.isAvailable) {
+        toast.error("Sorry, this time slot is fully booked. Please choose another time.")
+        return
+      }
+    } else {
+      if (cart.items.length === 0) {
+        toast.error("Your cart is empty!")
+        return
+      }
     }
 
     setLoading(true)
 
     // ✅ RECOVERY: Ensure restaurantId is present
-    let finalRestaurantId = cart.restaurantId
+    let finalRestaurantId = restaurantId // Using the derived one from top of component
     if (!finalRestaurantId && cart.items.length > 0) {
       const firstItemRest = cart.items[0].menuItem?.restaurant
-      finalRestaurantId = typeof firstItemRest === 'object' ? firstItemRest._id : firstItemRest
+      finalRestaurantId = typeof firstItemRest === 'object' ? (firstItemRest as any)._id : firstItemRest
       console.log("♻️ Recovered restaurantId from items:", finalRestaurantId)
     }
 
@@ -358,6 +449,11 @@ function CheckoutPageInner() {
           cardNumber: formData.cardNumber.replace(/\s/g, '').slice(-4), // Masked
           cardName: formData.cardName
         },
+        reservationDateTime: formData.orderType === "dine-in" 
+          ? `${formData.reservationDate}T${formData.reservationTime}` 
+          : null,
+        peopleCount: formData.orderType === "dine-in" ? formData.peopleCount : null,
+        pickupTime: formData.orderType === "pickup" ? formData.pickupTime : null,
         usePoints: pointsToRedeem > 0,
         pointsToRedeem: pointsToRedeem
       })
@@ -402,6 +498,7 @@ function CheckoutPageInner() {
             orderNumber: response.data.data.orderNumber,
             customerName: formData.fullName,
             totalAmount: totals.total,
+            orderType: formData.orderType
           }
         })
       } else {
@@ -420,8 +517,8 @@ function CheckoutPageInner() {
 
   const [isSuccess, setIsSuccess] = useState(false)
   
-  // If cart is empty
-  if (cart.items.length === 0 && !isSuccess) {
+  // If cart is empty (Allow empty cart for Dine-In reservations)
+  if (formData.orderType !== "dine-in" && cart.items.length === 0 && !isSuccess) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 pt-20">
         <div className="max-w-4xl mx-auto px-4 py-12">
@@ -464,54 +561,204 @@ function CheckoutPageInner() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Left Column - Delivery Details */}
           <div className="lg:col-span-2 space-y-6">
+            {!restaurantId && (
+              <Card className="border-red-200 bg-red-50">
+                <CardContent className="p-6 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
+                      <AlertCircle className="text-red-600 w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">No Restaurant Selected</h3>
+                      <p className="text-sm text-gray-500 font-medium">Please select a restaurant to proceed with your reservation.</p>
+                    </div>
+                  </div>
+                  <Button 
+                    onClick={() => navigate('/menu')}
+                    className="bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl"
+                  >
+                    Go to Menu
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Order Type Selection */}
-            <Card>
+            <Card className={formData.orderType === "dine-in" ? "border-amber-200 bg-amber-50/30" : ""}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <MapPin className="w-5 h-5" />
-                  Order Type
+                  <UtensilsCrossed className="w-5 h-5 text-amber-600" />
+                  Order Mode: <span className="text-amber-600 uppercase tracking-tighter ml-1">Dine-In</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-4">
-                  {orderTypes.map((type) => (
-                    <Label
-                      key={type.value}
-                      className={`flex flex-col items-center justify-center p-6 border-2 rounded-2xl cursor-pointer transition-all duration-300 ring-offset-2 ${formData.orderType === type.value
-                        ? "border-amber-500 bg-amber-50 text-amber-700 ring-2 ring-amber-500"
-                        : "border-gray-100 bg-white hover:border-amber-200 hover:bg-gray-50"
-                        }`}
-                    >
-                      <input
-                        type="radio"
-                        name="orderType"
-                        value={type.value}
-                        checked={formData.orderType === type.value}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, orderType: e.target.value }))}
-                        className="sr-only"
-                      />
-                      {type.icon}
-                      <span className="font-semibold text-sm sm:text-base">{type.label}</span>
-                    </Label>
-                  ))}
-                </div>
+                {formData.orderType === "dine-in" ? (
+                  <div className="bg-white border border-amber-200 rounded-2xl p-6 flex items-center justify-between shadow-sm">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center">
+                        <UtensilsCrossed className="text-amber-600 w-8 h-8" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-gray-900 uppercase tracking-tight">Table Reservation Flow</h4>
+                        <p className="text-xs text-gray-500 font-bold uppercase tracking-widest">Other options are disabled in this mode</p>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-4">
+                    {orderTypes.map((type) => (
+                      <Label
+                        key={type.value}
+                        className={`flex flex-col items-center justify-center p-6 border-2 rounded-2xl cursor-pointer transition-all duration-300 ring-offset-2 ${formData.orderType === type.value
+                          ? "border-amber-500 bg-amber-50 text-amber-700 ring-2 ring-amber-500"
+                          : "border-gray-100 bg-white hover:border-amber-200 hover:bg-gray-50"
+                          }`}
+                      >
+                        <input
+                          type="radio"
+                          name="orderType"
+                          value={type.value}
+                          checked={formData.orderType === type.value}
+                          onChange={(e) => setFormData((prev) => ({ ...prev, orderType: e.target.value as any }))}
+                          className="sr-only"
+                        />
+                        {type.icon}
+                        <span className="font-semibold text-sm sm:text-base">{type.label}</span>
+                      </Label>
+                    ))}
+                  </div>
+                )}
 
                 {formData.orderType === "dine-in" && (
-                  <div className="mt-6 p-4 bg-amber-50 rounded-xl border border-amber-100 flex items-center gap-4 animate-in fade-in slide-in-from-top-2">
-                    <div className="bg-amber-100 p-3 rounded-full">
-                      <UtensilsCrossed className="w-5 h-5 text-amber-600" />
+                  <div className="mt-8 space-y-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="grid md:grid-cols-2 gap-6">
+                      {/* Date Picker */}
+                      <div className="space-y-3">
+                        <Label className="text-gray-700 font-bold flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-amber-500" />
+                          Select Date
+                        </Label>
+                        <Input
+                          type="date"
+                          name="reservationDate"
+                          min={new Date().toISOString().split('T')[0]}
+                          value={formData.reservationDate}
+                          onChange={handleInputChange}
+                          className="h-12 rounded-xl border-gray-200 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      {/* Time Slots */}
+                      <div className="space-y-3">
+                        <Label className="text-gray-700 font-bold flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-amber-500" />
+                          Preferred Time
+                        </Label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {timeSlots.map(time => (
+                            <button
+                              key={time}
+                              type="button"
+                              onClick={() => setFormData(prev => ({ ...prev, reservationTime: time }))}
+                              className={`py-2 text-xs font-bold rounded-lg border transition-all ${
+                                formData.reservationTime === time 
+                                  ? "bg-amber-500 border-amber-500 text-white shadow-lg shadow-amber-200" 
+                                  : "bg-white border-gray-100 text-gray-500 hover:border-amber-200"
+                              }`}
+                            >
+                              {time}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex-1 space-y-1">
-                      <Label htmlFor="tableNumber" className="text-amber-900 font-semibold">Table Number</Label>
+
+                    {/* People Counter */}
+                    <div className="p-6 bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl border border-amber-100 flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="bg-white p-3 rounded-xl shadow-sm">
+                          <Users className="w-6 h-6 text-amber-600" />
+                        </div>
+                        <div>
+                          <p className="font-black text-gray-900">Number of People</p>
+                          <p className="text-xs text-gray-500 font-bold">How many guests are joining?</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4 bg-white p-2 rounded-xl shadow-inner border border-amber-100">
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, peopleCount: Math.max(1, prev.peopleCount - 1) }))}
+                          className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-50 text-gray-400 hover:text-amber-500 transition-colors"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="text-lg font-black text-gray-900 min-w-[20px] text-center">{formData.peopleCount}</span>
+                        <button
+                          type="button"
+                          onClick={() => setFormData(prev => ({ ...prev, peopleCount: prev.peopleCount + 1 }))}
+                          className="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-gray-50 text-gray-400 hover:text-amber-500 transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3">
+                      <Label htmlFor="tableNumber" className="text-gray-700 font-bold">Special Requests / Table Pref (Optional)</Label>
                       <Input
                         id="tableNumber"
                         name="tableNumber"
-                        placeholder="e.g., Table 5"
+                        placeholder="e.g., Near window, Quiet area..."
                         value={formData.tableNumber}
                         onChange={handleInputChange}
-                        className="bg-white border-amber-200 focus:ring-amber-500"
+                        className="h-12 rounded-xl border-gray-200 focus:ring-amber-500"
                       />
+                    </div>
+
+                    {/* Availability Status */}
+                    <div className={`p-4 rounded-xl border flex items-center gap-3 transition-colors ${
+                      checkingAvailability ? "bg-gray-50 border-gray-100" :
+                      availability?.isAvailable ? "bg-green-50 border-green-100 text-green-700" :
+                      "bg-red-50 border-red-100 text-red-700"
+                    }`}>
+                      {checkingAvailability ? (
+                        <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                      ) : availability?.isAvailable ? (
+                        <CheckCircle2 className="w-5 h-5" />
+                      ) : (
+                        <AlertCircle className="w-5 h-5" />
+                      )}
+                      <p className="text-sm font-bold">
+                        {checkingAvailability ? "Checking table availability..." :
+                         availability?.isAvailable ? `Table available! (${availability.availableTables} left)` :
+                         "Fully Booked for this time slot"}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {formData.orderType === "pickup" && (
+                  <div className="mt-6 p-6 bg-blue-50 rounded-2xl border border-blue-100 flex items-center gap-6 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="bg-white p-4 rounded-2xl shadow-sm">
+                      <ShoppingBag className="w-8 h-8 text-blue-500" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-black text-gray-900">Self-Pickup Order</h4>
+                      <p className="text-sm text-gray-500 font-medium leading-relaxed">
+                        Your order will be ready for collection in approximately <span className="text-blue-600 font-black">{dynamicETA} minutes</span>.
+                      </p>
+                      <div className="mt-4 flex items-center gap-3">
+                         <div className="flex-1">
+                            <Label className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-1">Pickup Time (Optional)</Label>
+                            <Input 
+                              type="time" 
+                              name="pickupTime"
+                              value={formData.pickupTime}
+                              onChange={handleInputChange}
+                              className="h-10 bg-white border-blue-100 rounded-lg text-sm"
+                            />
+                         </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -818,20 +1065,22 @@ function CheckoutPageInner() {
 
               <CardFooter>
                 <Button
-                  className="w-full"
+                  className={`w-full h-16 rounded-[24px] text-white font-black text-sm uppercase tracking-[0.2em] shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3 ${
+                    formData.orderType === "dine-in" ? "bg-amber-500 hover:bg-amber-600 shadow-amber-200" : "bg-[#FF5C00] hover:bg-[#FF7A00] shadow-orange-200"
+                  }`}
                   size="lg"
                   onClick={handlePlaceOrder}
-                  disabled={loading}
+                  disabled={loading || (formData.orderType === "dine-in" && availability?.isAvailable === false)}
                 >
                   {loading ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Processing Order...
+                      {formData.orderType === "dine-in" ? "Reserving..." : "Processing Order..."}
                     </>
                   ) : (
                     <>
-                      <CheckCircle className="mr-2 w-4 h-4" />
-                      Place Order
+                      {formData.orderType === "dine-in" ? <Calendar className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                      {formData.orderType === "dine-in" ? "Confirm Reservation" : "Place Order & Pay"}
                     </>
                   )}
                 </Button>

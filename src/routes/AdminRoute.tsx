@@ -5,7 +5,7 @@ interface Props {
 }
 
 const AdminRoute = ({ children }: Props) => {
-  const token = localStorage.getItem("adminToken")
+  const token = sessionStorage.getItem("adminToken")
 
   if (!token) {
     return <Navigate to="/admin/login" replace />

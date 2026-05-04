@@ -9,8 +9,11 @@ import { fetchAllMenuItems, resetPagination } from "@/store/slices/menuSlice"
 import { socketService } from "@/services/socket"
 import RestaurantMenu from "@/components/restaurant-menu"
 import { MenuItemModal } from "@/components/menu-item-modal"
-import { Plus, Search } from "lucide-react"
+import { Plus, Search, UtensilsCrossed } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { setOrderType } from "@/store/slices/cartSlice"
 import type { Filters, MenuItem } from "@/types"
+import api from "@/services/api"
 
 // ✅ Initial Filters
 const initialFilters: Filters = {
@@ -37,20 +40,58 @@ export default function MenuPage() {
   // ✅ IntersectionObserver ref for infinite scroll
   const observerRef = useRef<HTMLDivElement>(null)
 
-  // Categories definition
-  const categories = [
+  // ✅ Dynamic Categories state
+  const [dynamicCategories, setDynamicCategories] = useState([
     { id: "All", name: "All Items", icon: "🍽️" },
     { id: "Popular", name: "Popular", icon: "⭐" },
     { id: "Special Deals", name: "Special Deals", icon: "🔥" },
-    { id: "Burgers", name: "Burgers", icon: "🍔" },
-    { id: "Pizza", name: "Pizza", icon: "🍕" },
-    { id: "Sides", name: "Sides", icon: "🍟" },
-    { id: "Beverages", name: "Beverages", icon: "🥤" },
-  ]
+  ])
+
+  const ICON_MAPPING: Record<string, string> = {
+    "Burgers": "🍔",
+    "Pizza": "🍕",
+    "Sides": "🍟",
+    "Beverages": "🥤",
+    "Chinese": "🍜",
+    "Desi": "🍛",
+    "Fast Food": "🍕",
+    "Biryani": "🥘",
+    "Pasta": "🍝",
+    "Desserts": "🍰",
+    "Sea Food": "🦞"
+  }
 
   // ✅ Initial data load (page 1)
   useEffect(() => {
     dispatch(fetchAllMenuItems({ page: 1, limit: 12, reset: true }))
+
+    // Fetch dynamic categories from backend
+    const fetchCategories = async () => {
+      try {
+        const response = await api.get("/menu/categories/list")
+        if (response.data.success) {
+          const categoryNames = response.data.data
+          const fixedCats = [
+            { id: "All", name: "All Items", icon: "🍽️" },
+            { id: "Popular", name: "Popular", icon: "⭐" },
+            { id: "Special Deals", name: "Special Deals", icon: "🔥" },
+          ]
+          
+          const fetchedCats = categoryNames
+            .filter((name: string) => name !== "Special Deals") // Already in fixedCats
+            .map((name: string) => ({
+              id: name,
+              name: name,
+              icon: ICON_MAPPING[name] || "🍽️"
+            }))
+
+          setDynamicCategories([...fixedCats, ...fetchedCats])
+        }
+      } catch (error) {
+        console.error("Failed to fetch categories:", error)
+      }
+    }
+    fetchCategories()
 
     const socket = socketService.connect()
     if (socket) {
@@ -174,19 +215,6 @@ export default function MenuPage() {
               </motion.div>
             </div>
 
-            {/* Address Widget (Mockup from screenshot) */}
-            <div className="absolute right-16 top-1/2 -translate-y-1/2 hidden xl:block">
-              <div className="bg-white/10 backdrop-blur-md p-10 rounded-[40px] border border-white/10 shadow-2xl min-w-[280px]">
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="text-white/60">📍</div>
-                  <span className="text-white font-black uppercase tracking-widest text-[10px]">Deliver to</span>
-                </div>
-                <p className="text-white font-black mb-4 text-base">No address set yet</p>
-                <button className="w-full h-12 bg-white/10 hover:bg-white/20 text-white font-black text-[10px] uppercase tracking-widest rounded-2xl transition-all flex items-center justify-center gap-2">
-                  Change Address <span>›</span>
-                </button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -194,7 +222,7 @@ export default function MenuPage() {
         <div className="sticky top-20 z-40 bg-[#fff9f5]/80 backdrop-blur-xl border-b border-orange-100/50">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex items-center gap-4 py-8 overflow-x-auto no-scrollbar scroll-smooth">
-              {categories.map((cat) => (
+              {dynamicCategories.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => handleCategorySelect(cat.id)}
@@ -227,6 +255,31 @@ export default function MenuPage() {
         <section className="bg-[#fff9f5] min-h-screen">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
             <div className="flex flex-col gap-12">
+              {/* Dine-In Mode Banner */}
+              {useAppSelector(state => state.cart.orderType) === 'dine-in' && (
+                <motion.div 
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="bg-amber-50 border border-amber-200 rounded-3xl p-6 flex items-center justify-between shadow-sm"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-amber-100 rounded-2xl flex items-center justify-center">
+                      <UtensilsCrossed className="text-amber-600 w-8 h-8" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Dine-In Mode Active</h3>
+                      <p className="text-sm text-gray-500 font-medium italic">Table reservation details will be requested at checkout.</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    className="border-amber-200 text-amber-600 hover:bg-amber-100 font-bold rounded-xl"
+                    onClick={() => dispatch(setOrderType('delivery'))}
+                  >
+                    Switch to Delivery
+                  </Button>
+                </motion.div>
+              )}
 
               {/* Main Menu Area */}
               <div className="flex-1">

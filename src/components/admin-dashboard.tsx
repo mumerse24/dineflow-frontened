@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { OrderBill } from "./order-bill"
 import { useAppDispatch, useAppSelector } from "@/store/hooks"
+import { useSearchParams } from "react-router-dom"
 import {
   fetchAdminStats,
   fetchPendingRestaurants,
@@ -30,6 +31,8 @@ import {
   fetchAllRestaurants,
   setSelectedRestaurantId,
   fetchRiders,
+  fetchAvailableRiders,
+  assignRiderToOrder,
   setOrderStatus,
   setRiderStatus,
   fetchFeedbackStats,
@@ -50,7 +53,9 @@ import { MapPin } from "lucide-react"
 
 export function AdminDashboard() {
   const dispatch = useAppDispatch()
-  const [activeTab, setActiveTab] = useState<"overview" | "menu" | "orders" | "restaurants" | "users" | "riders" | "feedback" | "landmarks">("overview")
+  const [searchParams, setSearchParams] = useSearchParams()
+  const initialTab = (searchParams.get("tab") as any) || "overview"
+  const [activeTab, setActiveTab] = useState<"overview" | "menu" | "orders" | "restaurants" | "users" | "riders" | "feedback" | "landmarks">(initialTab)
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
   const [darkMode, setDarkMode] = useState(false)
   const [userSearchTerm, setUserSearchTerm] = useState("")
@@ -58,6 +63,8 @@ export function AdminDashboard() {
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false)
   const [isCreateRiderModalOpen, setIsCreateRiderModalOpen] = useState(false)
   const [newRiderData, setNewRiderData] = useState({ name: "", email: "", password: "", phone: "" })
+  const [selectedRiderId, setSelectedRiderId] = useState<string>("")
+  const [isAssigningRider, setIsAssigningRider] = useState(false)
 
 
   const [dateRange, setDateRange] = useState<{ from: string; to: string }>({
@@ -159,6 +166,12 @@ export function AdminDashboard() {
     };
   }, [dispatch])
 
+  // Update URL when tab changes
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab as any)
+    setSearchParams({ tab })
+  }
+
   // Data Loading
   const loadDashboardData = () => {
     dispatch(fetchAdminStats())
@@ -198,6 +211,30 @@ export function AdminDashboard() {
   const handleViewOrderDetails = (order: Order) => {
     setSelectedOrder(order)
     setIsOrderModalOpen(true)
+    if (order.status === "confirmed") {
+      dispatch(fetchAvailableRiders())
+    }
+  }
+
+  const handleAssignRider = async (orderId: string) => {
+    if (!selectedRiderId) {
+      toast.error("Please select a rider first")
+      return
+    }
+
+    setIsAssigningRider(true)
+    try {
+      await dispatch(assignRiderToOrder({ orderId, riderId: selectedRiderId })).unwrap()
+      toast.success("Rider assigned successfully!")
+      setIsOrderModalOpen(false)
+      setSelectedOrder(null)
+      setSelectedRiderId("")
+      loadDashboardData()
+    } catch (err: any) {
+      toast.error(err || "Failed to assign rider")
+    } finally {
+      setIsAssigningRider(false)
+    }
   }
 
 
@@ -244,6 +281,7 @@ export function AdminDashboard() {
         return { className: "bg-green-100 text-green-800 border-green-200" }
       case "confirmed":
       case "accepted":
+      case "assigned":
         return { className: "bg-blue-100 text-blue-800 border-blue-200" }
       case "preparing":
       case "cooking":
@@ -649,7 +687,7 @@ export function AdminDashboard() {
               {tabs.map((tab) => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id as any)}
+                  onClick={() => handleTabChange(tab.id)}
                   className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === tab.id
                     ? "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
                     : "text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
@@ -709,7 +747,7 @@ export function AdminDashboard() {
                   <CardHeader className="border-b border-gray-100">
                     <div className="flex items-center justify-between">
                       <CardTitle>Recent Orders</CardTitle>
-                      <Button variant="ghost" size="sm" onClick={() => setActiveTab("orders")}>
+                      <Button variant="ghost" size="sm" onClick={() => handleTabChange("orders")}>
                         View All
                       </Button>
                     </div>
@@ -1106,6 +1144,31 @@ export function AdminDashboard() {
                         Accept
                       </Button>
                     </>
+                  )}
+
+                  {selectedOrder.status === 'confirmed' && (
+                    <div className="flex items-center gap-3 bg-gray-50 p-2 rounded-2xl border border-gray-100 flex-1 max-w-md">
+                      <select 
+                        value={selectedRiderId}
+                        onChange={(e) => setSelectedRiderId(e.target.value)}
+                        className="flex-1 bg-transparent border-none text-sm font-bold focus:ring-0 cursor-pointer"
+                      >
+                        <option value="">Select a Rider</option>
+                        {availableRiders?.map(rider => (
+                          <option key={rider._id} value={rider._id}>
+                            {rider.name} ({rider.activeOrderCount || 0} active)
+                          </option>
+                        ))}
+                      </select>
+                      <Button 
+                        size="sm"
+                        disabled={!selectedRiderId || isAssigningRider}
+                        className="bg-amber-600 hover:bg-amber-700 text-white rounded-xl px-4 font-bold text-xs"
+                        onClick={() => handleAssignRider(selectedOrder._id)}
+                      >
+                        {isAssigningRider ? "Assigning..." : "Assign Rider"}
+                      </Button>
+                    </div>
                   )}
                   <Button 
                     variant="outline" 

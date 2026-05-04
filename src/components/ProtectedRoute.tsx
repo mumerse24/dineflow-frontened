@@ -1,49 +1,40 @@
-import { Navigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import AuthService from '../services/alogin';
+import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { RootState } from "../store/store";
+import PageLoader from "./PageLoader";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  allowedRoles?: string[];
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+/**
+ * ✅ Role-Based Security Guard
+ * Checks if the user is authenticated and has the correct role before rendering the page.
+ * If not, it redirects them to the appropriate dashboard or home page.
+ */
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
+  const { isAuthenticated, user, isLoading } = useSelector((state: RootState) => state.auth);
+  const location = useLocation();
 
-  useEffect(() => {
-    // Check authentication
-    const checkAuth = () => {
-      const authenticated = AuthService.isAuthenticated();
-      setIsAuthenticated(authenticated);
-    };
-
-    checkAuth();
-
-    // Listen for storage changes (for logout from other tabs)
-    const handleStorageChange = () => {
-      checkAuth();
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
-
-  // Show loading while checking authentication
-  if (isAuthenticated === null) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 to-amber-50">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-orange-600 font-medium">Verifying authentication...</p>
-        </div>
-      </div>
-    );
+  // 1. Show loader while checking session
+  if (isLoading) {
+    return <PageLoader />;
   }
 
-  // Redirect to login if not authenticated
+  // 2. If not logged in, redirect to home/login
   if (!isAuthenticated) {
-    return <Navigate to="/admin/login" replace />;
+    return <Navigate to="/" state={{ from: location }} replace />;
   }
 
+  // 3. If role is not allowed, redirect to home
+  if (allowedRoles && user && !allowedRoles.includes(user.role || "")) {
+    console.warn(`🚫 Role Mismatch: ${user.role} tried to access ${location.pathname}`);
+    return <Navigate to="/" replace />;
+  }
+
+  // 4. Everything is fine, let them in!
   return <>{children}</>;
 };
 

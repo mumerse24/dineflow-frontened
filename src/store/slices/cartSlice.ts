@@ -11,11 +11,17 @@ interface CartState {
   error: string | null
   deliveryAddress: string
   specialInstructions: string
+  orderType: "delivery" | "pickup" | "dine-in"
+  reservationData: {
+    date: string
+    time: string
+    guests: number
+  } | null
 }
 
 const getSanitizedInitialItems = (): CartItem[] => {
   try {
-    const stored = localStorage.getItem("cart")
+    const stored = sessionStorage.getItem("cart")
     if (!stored) return []
     const parsed = JSON.parse(stored)
     if (!Array.isArray(parsed)) return []
@@ -26,7 +32,7 @@ const getSanitizedInitialItems = (): CartItem[] => {
 }
 
 const getStoredRestaurantId = (): string | null => {
-  return localStorage.getItem("cartRestaurantId")
+  return sessionStorage.getItem("cartRestaurantId")
 }
 
 // Calculate totals helper
@@ -49,6 +55,8 @@ const initialState: CartState = {
   error: null,
   deliveryAddress: "",
   specialInstructions: "",
+  orderType: "delivery",
+  reservationData: null,
 }
 
 // ✅ EXISTING THUNKS (tumhara code)
@@ -202,9 +210,9 @@ const cartSlice = createSlice({
       state.totalAmount = totals.totalAmount
       state.totalItems = totals.totalItems
 
-      localStorage.setItem("cart", JSON.stringify(state.items))
+      sessionStorage.setItem("cart", JSON.stringify(state.items))
       if (state.restaurantId) {
-        localStorage.setItem("cartRestaurantId", state.restaurantId)
+        sessionStorage.setItem("cartRestaurantId", state.restaurantId)
       }
     },
 
@@ -219,11 +227,11 @@ const cartSlice = createSlice({
       state.totalAmount = totals.totalAmount
       state.totalItems = totals.totalItems
 
-      localStorage.setItem("cart", JSON.stringify(state.items))
+      sessionStorage.setItem("cart", JSON.stringify(state.items))
       if (state.restaurantId) {
-        localStorage.setItem("cartRestaurantId", state.restaurantId)
+        sessionStorage.setItem("cartRestaurantId", state.restaurantId)
       } else {
-        localStorage.removeItem("cartRestaurantId")
+        sessionStorage.removeItem("cartRestaurantId")
       }
     },
 
@@ -247,11 +255,11 @@ const cartSlice = createSlice({
       state.totalAmount = totals.totalAmount
       state.totalItems = totals.totalItems
 
-      localStorage.setItem("cart", JSON.stringify(state.items))
+      sessionStorage.setItem("cart", JSON.stringify(state.items))
       if (state.restaurantId) {
-        localStorage.setItem("cartRestaurantId", state.restaurantId)
+        sessionStorage.setItem("cartRestaurantId", state.restaurantId)
       } else {
-        localStorage.removeItem("cartRestaurantId")
+        sessionStorage.removeItem("cartRestaurantId")
       }
     },
 
@@ -260,8 +268,8 @@ const cartSlice = createSlice({
       state.totalAmount = 0
       state.totalItems = 0
       state.restaurantId = null
-      localStorage.removeItem("cart")
-      localStorage.removeItem("cartRestaurantId")
+      sessionStorage.removeItem("cart")
+      sessionStorage.removeItem("cartRestaurantId")
     },
 
     setDeliveryAddress: (state, action: PayloadAction<string>) => {
@@ -274,6 +282,12 @@ const cartSlice = createSlice({
 
     clearError: (state) => {
       state.error = null
+    },
+    setOrderType: (state, action: PayloadAction<"delivery" | "pickup" | "dine-in">) => {
+      state.orderType = action.payload
+    },
+    setReservationData: (state, action: PayloadAction<{ date: string; time: string; guests: number } | null>) => {
+      state.reservationData = action.payload
     },
   },
   extraReducers: (builder) => {
@@ -300,13 +314,13 @@ const cartSlice = createSlice({
 
         if (rId) {
           state.restaurantId = rId;
-          localStorage.setItem("cartRestaurantId", rId);
+          sessionStorage.setItem("cartRestaurantId", rId);
         }
 
         const totals = calculateTotals(state.items)
         state.totalAmount = totals.totalAmount
         state.totalItems = totals.totalItems
-        localStorage.setItem("cart", JSON.stringify(state.items))
+        sessionStorage.setItem("cart", JSON.stringify(state.items))
       })
       .addCase(syncCartWithServer.rejected, (state, action) => {
         state.isLoading = false
@@ -328,13 +342,13 @@ const cartSlice = createSlice({
         }
 
         if (state.restaurantId) {
-          localStorage.setItem("cartRestaurantId", state.restaurantId)
+          sessionStorage.setItem("cartRestaurantId", state.restaurantId)
         }
 
         const totals = calculateTotals(state.items)
         state.totalAmount = totals.totalAmount
         state.totalItems = totals.totalItems
-        localStorage.setItem("cart", JSON.stringify(state.items))
+        sessionStorage.setItem("cart", JSON.stringify(state.items))
       })
 
       // Clear cart server
@@ -343,7 +357,7 @@ const cartSlice = createSlice({
         state.totalAmount = 0
         state.totalItems = 0
         state.restaurantId = null
-        localStorage.removeItem("cart")
+        sessionStorage.removeItem("cart")
       })
 
       // Add to cart server
@@ -368,9 +382,9 @@ const cartSlice = createSlice({
         const totals = calculateTotals(state.items);
         state.totalItems = totals.totalItems;
         state.totalAmount = totals.totalAmount;
-        localStorage.setItem("cart", JSON.stringify(state.items));
+        sessionStorage.setItem("cart", JSON.stringify(state.items));
         if (state.restaurantId) {
-          localStorage.setItem("cartRestaurantId", state.restaurantId);
+          sessionStorage.setItem("cartRestaurantId", state.restaurantId);
         }
       })
       .addCase(addToCartServer.rejected, (state, action) => {
@@ -394,11 +408,11 @@ const cartSlice = createSlice({
         const totals = calculateTotals(state.items);
         state.totalItems = totals.totalItems;
         state.totalAmount = totals.totalAmount;
-        localStorage.setItem("cart", JSON.stringify(state.items));
+        sessionStorage.setItem("cart", JSON.stringify(state.items));
         if (state.restaurantId) {
-          localStorage.setItem("cartRestaurantId", state.restaurantId);
+          sessionStorage.setItem("cartRestaurantId", state.restaurantId);
         } else {
-          localStorage.removeItem("cartRestaurantId");
+          sessionStorage.removeItem("cartRestaurantId");
         }
       })
       .addCase(updateCartItemServer.rejected, (state, action) => {
@@ -418,11 +432,11 @@ const cartSlice = createSlice({
         state.totalAmount = totals.totalAmount
         state.totalItems = totals.totalItems
 
-        localStorage.setItem("cart", JSON.stringify(state.items))
+        sessionStorage.setItem("cart", JSON.stringify(state.items))
         if (state.restaurantId) {
-          localStorage.setItem("cartRestaurantId", state.restaurantId)
+          sessionStorage.setItem("cartRestaurantId", state.restaurantId)
         } else {
-          localStorage.removeItem("cartRestaurantId")
+          sessionStorage.removeItem("cartRestaurantId")
         }
       })
   },
@@ -436,6 +450,8 @@ export const {
   setDeliveryAddress,
   setSpecialInstructions,
   clearError,
+  setOrderType,
+  setReservationData,
 } = cartSlice.actions
 
 export default cartSlice.reducer

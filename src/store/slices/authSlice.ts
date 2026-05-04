@@ -14,30 +14,68 @@ interface AuthState {
   user: User | null
   token: string | null
   isLoading: boolean
+  profileFetched: boolean // ✅ Prevents redundant getProfile calls
   error: string | null
   isAuthenticated: boolean
 }
 
-// Check local storage for normal user, admin, or rider data
-const storedUser = localStorage.getItem("user") || localStorage.getItem("adminData") || localStorage.getItem("riderData");
-const storedToken = localStorage.getItem("token") || localStorage.getItem("adminToken") || localStorage.getItem("riderToken");
+const getInitialAuthState = (path: string = window.location.pathname) => {
+  let storedUser = null;
+  let storedToken = null;
 
-let initialUser = null;
-if (storedUser && storedUser !== "null" && storedUser !== "undefined") {
-  try {
-    initialUser = JSON.parse(storedUser);
-  } catch (e) {
-    console.error("Error parsing storedUser:", e);
-    localStorage.removeItem("user");
+  // 1. Try to get role-specific data based on path
+  if (path.startsWith('/admin')) {
+    storedUser = sessionStorage.getItem("adminData");
+    storedToken = sessionStorage.getItem("adminToken");
+  } else if (path.startsWith('/rider')) {
+    storedUser = sessionStorage.getItem("riderData");
+    storedToken = sessionStorage.getItem("riderToken");
+  } else {
+    storedUser = sessionStorage.getItem("user");
+    storedToken = sessionStorage.getItem("token");
   }
+
+  // 2. Fallback: If no data found for current path, try ANY available session
+  // This is crucial for the global redirection guard to work!
+  if (!storedToken || storedToken === "null" || storedToken === "undefined") {
+    storedToken = sessionStorage.getItem("adminToken") || sessionStorage.getItem("riderToken") || sessionStorage.getItem("token");
+    
+    if (storedToken === sessionStorage.getItem("adminToken")) {
+      storedUser = sessionStorage.getItem("adminData");
+    } else if (storedToken === sessionStorage.getItem("riderToken")) {
+      storedUser = sessionStorage.getItem("riderData");
+    } else {
+      storedUser = sessionStorage.getItem("user");
+    }
+  }
+
+  let user = null;
+  if (storedUser && storedUser !== "null" && storedUser !== "undefined") {
+    try {
+      user = JSON.parse(storedUser);
+    } catch (e) {
+      console.error("Error parsing storedUser:", e);
+    }
+  }
+
+  // Sanity Check: If we have a token but NO user data, it's a corrupted session.
+  // We should treat it as unauthenticated to avoid "undefined" errors in the UI.
+  if (storedToken && !user) {
+    return { user: null, token: null, isAuthenticated: false };
+  }
+
+  return {
+    user,
+    token: storedToken,
+    isAuthenticated: !!storedToken && storedToken !== "null" && storedToken !== "undefined"
+  };
 }
 
 const initialState: AuthState = {
-  user: initialUser,
-  token: storedToken,
+  ...getInitialAuthState(),
   isLoading: false,
+  profileFetched: false,
   error: null,
-  isAuthenticated: !!storedToken,
 }
 
 const authSlice = createSlice({
@@ -49,22 +87,50 @@ const authSlice = createSlice({
       state.token = null
       state.isAuthenticated = false
       state.error = null
-      localStorage.removeItem("token")
-      localStorage.removeItem("user")
-      localStorage.removeItem("adminToken")
-      localStorage.removeItem("adminData")
-      localStorage.removeItem("riderToken")
-      localStorage.removeItem("loginTime")
+      sessionStorage.removeItem("token")
+      sessionStorage.removeItem("user")
+      sessionStorage.removeItem("adminToken")
+      sessionStorage.removeItem("adminData")
+      sessionStorage.removeItem("riderToken")
+      sessionStorage.removeItem("loginTime")
+      sessionStorage.removeItem("riderData")
     },
     clearError: (state) => {
       state.error = null
     },
+    rehydrateAuth: (state) => {
+      const newState = getInitialAuthState();
+      
+      // Strict equality check to prevent unnecessary state updates
+      const tokenChanged = state.token !== newState.token;
+      const authChanged = state.isAuthenticated !== newState.isAuthenticated;
+      const userChanged = state.user?._id !== newState.user?._id;
+
+      if (tokenChanged || authChanged || userChanged) {
+        state.user = newState.user;
+        state.token = newState.token;
+        state.isAuthenticated = newState.isAuthenticated;
+        // If the user changed or we logged out, reset profileFetched
+        if (userChanged || !newState.isAuthenticated) {
+          state.profileFetched = false;
+        }
+      }
+    },
     setUser: (state, action: PayloadAction<User | null>) => {
       state.user = action.payload
       if (action.payload) {
-        localStorage.setItem("user", JSON.stringify(action.payload))
+        // Save to role-specific key
+        if (action.payload.role === "admin" || action.payload.role === "superadmin") {
+          sessionStorage.setItem("adminData", JSON.stringify(action.payload))
+        } else if (action.payload.role === "rider") {
+          sessionStorage.setItem("riderData", JSON.stringify(action.payload))
+        } else {
+          sessionStorage.setItem("user", JSON.stringify(action.payload))
+        }
       } else {
-        localStorage.removeItem("user")
+        sessionStorage.removeItem("user")
+        sessionStorage.removeItem("adminData")
+        sessionStorage.removeItem("riderData")
       }
     },
   },
@@ -139,6 +205,7 @@ const authSlice = createSlice({
         state.isLoading = false
         state.user = action.payload
         state.isAuthenticated = true
+        state.profileFetched = true // ✅ Mark as fetched
       })
       .addCase(getProfile.rejected, (state) => {
         state.isLoading = false
@@ -170,10 +237,8 @@ const authSlice = createSlice({
         state.token = action.payload.token
         state.isAuthenticated = true
         state.error = null
-        localStorage.setItem("user", JSON.stringify(action.payload.user))
-        localStorage.setItem("token", action.payload.token)
-        localStorage.setItem("riderToken", action.payload.token)
-        localStorage.setItem("riderData", JSON.stringify(action.payload.user))
+        sessionStorage.setItem("riderToken", action.payload.token)
+        sessionStorage.setItem("riderData", JSON.stringify(action.payload.user))
       })
       .addCase("rider/login/rejected", (state, action: any) => {
         state.isLoading = false
@@ -184,13 +249,13 @@ const authSlice = createSlice({
         state.isAuthenticated = false
         state.user = null
         state.token = null
-        localStorage.removeItem("user")
-        localStorage.removeItem("token")
-        localStorage.removeItem("riderToken")
-        localStorage.removeItem("riderData")
+        sessionStorage.removeItem("user")
+        sessionStorage.removeItem("token")
+        sessionStorage.removeItem("riderToken")
+        sessionStorage.removeItem("riderData")
       })
   },
 })
 
-export const { logout, clearError, setUser } = authSlice.actions
+export const { logout, clearError, setUser, rehydrateAuth } = authSlice.actions
 export default authSlice.reducer   

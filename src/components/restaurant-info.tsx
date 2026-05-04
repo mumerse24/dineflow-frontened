@@ -3,6 +3,9 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { useNavigate } from "react-router-dom"
+import { useAppDispatch } from "@/store/hooks"
+import { setOrderType } from "@/store/slices/cartSlice"
 
 const restaurants = [
   {
@@ -120,6 +123,8 @@ interface RestaurantInfoProps {
 }
 
 export function RestaurantInfo({ restaurantId }: RestaurantInfoProps) {
+  const navigate = useNavigate()
+  const dispatch = useAppDispatch()
   const restaurant = restaurants.find((r) => r.id === Number(restaurantId))
   if (!restaurant) {
     return (
@@ -223,8 +228,19 @@ export function RestaurantInfo({ restaurantId }: RestaurantInfoProps) {
 
           {/* Action Buttons */}
           <div className="space-y-3">
-            <Button className="w-full bg-amber-600 hover:bg-amber-700">View Menu & Order</Button>
-            <Button variant="outline" className="w-full bg-transparent">
+            <Button className="w-full bg-[#FF5C00] hover:bg-[#FF7A00] font-black uppercase tracking-widest h-14 rounded-2xl shadow-xl shadow-orange-200">
+              View Menu & Order
+            </Button>
+            <Button 
+              onClick={() => {
+                dispatch(setOrderType('dine-in'));
+                navigate('/checkout', { state: { restaurantId, orderType: 'dine-in' } });
+              }}
+              className="w-full bg-amber-500 hover:bg-amber-600 text-white font-black uppercase tracking-widest h-14 rounded-2xl shadow-xl shadow-amber-200 border-none"
+            >
+              Reserve a Table Only
+            </Button>
+            <Button variant="outline" className="w-full h-14 rounded-2xl font-bold border-gray-200 text-gray-500">
               Add to Favorites
             </Button>
           </div>

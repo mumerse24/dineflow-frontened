@@ -74,7 +74,7 @@ export function DishDetailModal({ dish, isOpen, onClose }: DishDetailModalProps)
         if (!dish) return
         try {
             const restaurantId = typeof dish.restaurant === "object" ? dish.restaurant._id : dish.restaurant
-            
+
             // Format customizations for the backend
             const customizations = selectedToppings.map(t => ({
                 name: "Extra Toppings",
@@ -100,15 +100,15 @@ export function DishDetailModal({ dish, isOpen, onClose }: DishDetailModalProps)
     }
 
     const toggleIngredient = (ing: string) => {
-        setRemovedIngredients(prev => 
+        setRemovedIngredients(prev =>
             prev.includes(ing) ? prev.filter(i => i !== ing) : [...prev, ing]
         )
     }
 
     const toggleTopping = (topping: any) => {
-        setSelectedToppings(prev => 
-            prev.some(t => t.name === topping.name) 
-                ? prev.filter(t => t.name !== topping.name) 
+        setSelectedToppings(prev =>
+            prev.some(t => t.name === topping.name)
+                ? prev.filter(t => t.name !== topping.name)
                 : [...prev, topping]
         )
     }
@@ -177,7 +177,11 @@ export function DishDetailModal({ dish, isOpen, onClose }: DishDetailModalProps)
 
     return (
         <Dialog open={isOpen} onOpenChange={onClose}>
-            <DialogContent aria-describedby={undefined} aria-labelledby={undefined} className="max-w-4xl p-0 overflow-hidden bg-white border-none shadow-2xl sm:rounded-3xl">
+            <DialogContent className="max-w-4xl p-0 overflow-hidden bg-white border-none shadow-2xl sm:rounded-3xl">
+                <div className="sr-only">
+                    <DialogTitle>{dish.name}</DialogTitle>
+                    <DialogDescription>{dish.description}</DialogDescription>
+                </div>
                 <div className="flex flex-col md:flex-row h-full max-h-[90vh]">
                     {/* Left: Image & Quick Info */}
                     <div className="md:w-1/2 relative h-[300px] md:h-auto">
@@ -192,11 +196,6 @@ export function DishDetailModal({ dish, isOpen, onClose }: DishDetailModalProps)
                             {dish.isDeal && (
                                 <Badge className="bg-orange-600 text-white border-none px-3 py-1 font-bold">
                                     🔥 HOT DEAL
-                                </Badge>
-                            )}
-                            {dish.isPopular && (
-                                <Badge className="bg-orange-400 text-white border-none px-3 py-1 font-bold">
-                                    ⭐ POPULAR
                                 </Badge>
                             )}
                         </div>

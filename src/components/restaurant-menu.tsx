@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
+import { useNavigate } from "react-router-dom"
 import { useAppSelector, useAppDispatch } from "@/store/hooks"
 import type { MenuItem, Filters } from "@/types"
 import { addToCartServer } from "@/store/slices/cartSlice"
@@ -52,6 +53,7 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
   const cartState = useAppSelector((state) => state.cart)
   const user = useAppSelector((state) => state.auth.user) // Get current user
   const dispatch = useAppDispatch()
+  const navigate = useNavigate()
 
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null)
   const [selectedDish, setSelectedDish] = useState<MenuItem | null>(null)
@@ -83,6 +85,11 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
 
   // Filter regular items based on search and category
   const filteredRegularItems = regularItems.filter((item) => {
+    // ✅ Special Case: Popular Section
+    if (filters.categories.includes("Popular")) {
+        return item.isPopular || (item.orderCount && item.orderCount > 0) || (item.rating && item.rating.average >= 4.5);
+    }
+
     // Category Filter
     if (filters.categories.length > 0 && !filters.categories.includes(item.category)) {
       return false
@@ -94,8 +101,13 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
     return true
   })
 
+  // ✅ Sort items if Popular is selected to show most ordered first
+  const finalItems = filters.categories.includes("Popular")
+    ? [...filteredRegularItems].sort((a, b) => (b.orderCount || 0) - (a.orderCount || 0))
+    : filteredRegularItems;
+
   // Determine what to show in the deals section
-  const showDeals = filters.categories.length === 0 || filters.categories.includes("Special Deals")
+  const showDeals = (filters.categories.length === 0 || filters.categories.includes("Special Deals")) && !filters.categories.includes("Popular")
   const filteredDeals = deals.filter(item => {
     // Search Filter for deals
     if (filters.search && !item.name.toLowerCase().includes(filters.search.toLowerCase()) && !item.description.toLowerCase().includes(filters.search.toLowerCase())) {
@@ -138,6 +150,19 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
 
   // Add to cart handler (optimized with toast + timeout safety)
   const handleAddToCart = async (item: MenuItem) => {
+    // ✅ Check if user is logged in
+    if (!user) {
+      toast.error("Please login first to place an order", {
+        description: "You need to be signed in to add items to your cart.",
+        duration: 5000,
+        action: {
+          label: "Login Now",
+          onClick: () => navigate("/", { state: { openAuth: true } })
+        }
+      });
+      return;
+    }
+
     const validId = item._id || (item as any).id;
 
     if (!validId) {
@@ -260,13 +285,15 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
         )}
 
         {/* 🍽️ Regular Menu Items */}
-        {filteredRegularItems.length > 0 && (
+        {finalItems.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-10">
               <div className="flex items-center gap-4">
-                <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter">🍽️ Menu Items</h2>
+                <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tighter">
+                  {filters.categories.includes("Popular") ? "⭐ Most Ordered" : "🍽️ Menu Items"}
+                </h2>
                 <span className="bg-orange-50 text-[10px] font-black text-[#FF5C00] px-4 py-1.5 rounded-full border border-orange-100 uppercase tracking-widest border-b-2 border-r-2 border-orange-200/50">
-                  {filteredRegularItems.length} items
+                  {finalItems.length} items
                 </span>
               </div>
               <button className="text-[#FF5C00] font-black uppercase tracking-widest text-xs hover:underline decoration-2 underline-offset-8">
@@ -274,7 +301,7 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
               </button>
             </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-10">
-              {filteredRegularItems.map((item) => renderMenuItem(item))}
+              {finalItems.map((item) => renderMenuItem(item))}
             </div>
           </div>
         )}

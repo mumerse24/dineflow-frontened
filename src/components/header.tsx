@@ -20,10 +20,10 @@ export function Header() {
   const dispatch = useDispatch()
   const navigate = useNavigate()
   const location = useLocation()
-  const adminToken = localStorage.getItem("adminToken")
-  const riderToken = localStorage.getItem("riderToken")
+  const adminToken = sessionStorage.getItem("adminToken")
+  const riderToken = sessionStorage.getItem("riderToken")
 
-  const { isAuthenticated, user, isLoading } = useSelector((state: any) => state.auth)
+  const { isAuthenticated, user, isLoading, profileFetched } = useSelector((state: any) => state.auth)
 
   const openSignIn = () => {
     setAuthMode("signin")
@@ -36,18 +36,18 @@ export function Header() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("adminToken")
-    localStorage.removeItem("riderToken")
+    sessionStorage.removeItem("adminToken")
+    sessionStorage.removeItem("riderToken")
     dispatch(logout())
     navigate("/")
   }
 
   useEffect(() => {
-    // Always fetch profile on mount if authenticated to keep data (like loyalty points) in sync
-    if (isAuthenticated && !isLoading) {
+    // Only fetch if authenticated, not loading, and NOT already fetched in this session
+    if (isAuthenticated && !isLoading && !profileFetched) {
       dispatch(getProfile() as any)
     }
-  }, [dispatch, isAuthenticated])
+  }, [dispatch, isAuthenticated, isLoading, profileFetched])
 
   useEffect(() => {
     // Automatically open auth modal if requested via location state (e.g. from a redirect)

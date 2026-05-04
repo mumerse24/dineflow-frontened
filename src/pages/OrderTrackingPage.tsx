@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Check, Clipboard, MapPin, Phone, Bike, Package, CheckCircle2, MessageSquare, ArrowLeft, Loader2, AlertCircle } from "lucide-react"
+import { Check, Clipboard, MapPin, Phone, Bike, Package, CheckCircle2, MessageSquare, ArrowLeft, Loader2, AlertCircle, UtensilsCrossed, ShoppingBag, Calendar, Navigation, Clock, UserPlus } from "lucide-react"
 import api from "@/services/api"
 import { motion, AnimatePresence } from "framer-motion"
 import { useSelector, useDispatch } from "react-redux"
@@ -15,6 +15,7 @@ import { MapContainer, TileLayer, Marker, Polyline, useMap } from "react-leaflet
 import "leaflet/dist/leaflet.css"
 import L from "leaflet"
 import { onMessageListener, requestForToken } from "@/services/firebase"
+import osrmService from "@/services/osrmService"
 
 // Leaflet Icons (Upgraded to Crisp SVGs)
 const restaurantIcon = L.divIcon({
@@ -84,95 +85,91 @@ const CameraFollow = ({ position, isTracking }: { position: [number, number], is
   return null;
 }
 
-// The Upgraded Dummy Tracking Component
-const DummyTrackingMap = ({ isTracking, isDelivered }: { isTracking: boolean, isDelivered: boolean }) => {
-  const restaurantPos: [number, number] = [24.8607, 67.0011];
-  const customerPos: [number, number] = [24.8750, 67.0150];
+// The Professional Live Tracking Component
+const LiveTrackingMap = ({ order, isTracking, isDelivered }: { order: any, isTracking: boolean, isDelivered: boolean }) => {
+  const restaurantPos: [number, number] = [
+    order.restaurant?.address?.coordinates?.lat || 32.5742,
+    order.restaurant?.address?.coordinates?.lng || 74.0754
+  ];
+  const customerPos: [number, number] = [
+    order.deliveryAddress?.coordinates?.lat || 32.5850,
+    order.deliveryAddress?.coordinates?.lng || 74.0850
+  ];
   
   const [riderPos, setRiderPos] = useState<[number, number]>(restaurantPos);
   const [bearing, setBearing] = useState<number>(0);
-  const [pathCoords, setPathCoords] = useState<[number, number][]>([restaurantPos]);
+  const [pathCoords, setPathCoords] = useState<[number, number][]>([restaurantPos, customerPos]);
   const [speed, setSpeed] = useState<number>(0);
   const [eta, setEta] = useState<number>(15);
+  const [distance, setDistance] = useState<number>(0);
+  const [isRiderOffline, setIsRiderOffline] = useState(false);
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
 
   useEffect(() => {
-    if (isDelivered) {
-      setRiderPos(customerPos);
-      setPathCoords([restaurantPos, customerPos]);
-      setSpeed(0);
-      setEta(0);
-      return;
-    }
-
-    if (isTracking && !isDelivered) {
-      let startTime: number | null = null;
-      let animationFrameId: number;
-      const duration = 60000; // 60s demo
-
-      let lastPos = restaurantPos;
-      let lastTime = 0;
-
-      const step = (timestamp: number) => {
-        if (!startTime) startTime = timestamp;
-        let progress = (timestamp - startTime) / duration;
-        if (progress > 1) progress = 1;
-
-        // Smooth easing: easeInOutCubic
-        const easeProgress = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-
-        const lat = restaurantPos[0] + (customerPos[0] - restaurantPos[0]) * easeProgress;
-        const lng = restaurantPos[1] + (customerPos[1] - restaurantPos[1]) * easeProgress;
-        
-        const newPos: [number, number] = [lat, lng];
-        
-        if (lastPos[0] !== newPos[0] || lastPos[1] !== newPos[1]) {
-            setBearing(getBearing(lastPos, newPos));
-            
-            if (timestamp - lastTime > 1000) {
-                // Update speed and ETA every second to avoid flickering
-                const distSinceLast = getDistance(lastPos[0], lastPos[1], newPos[0], newPos[1]);
-                const timeHours = (timestamp - lastTime) / 3600000;
-                const instSpeed = Math.min(Math.round(distSinceLast / timeHours), 65); // Cap to 65km/h
-                setSpeed(instSpeed > 0 ? instSpeed : speed);
-
-                const remainingDist = getDistance(newPos[0], newPos[1], customerPos[0], customerPos[1]);
-                const avgSpeed = 40; 
-                setEta(Math.max(1, Math.round((remainingDist / avgSpeed) * 60)));
-                
-                lastTime = timestamp;
-                lastPos = newPos;
-            }
+    if (order.status === "on_the_way" && order.movement_start_at) {
+      const startTime = new Date(order.movement_start_at).getTime();
+      const interval = setInterval(() => {
+        const now = Date.now();
+        const diff = Math.max(0, 10 - Math.floor((now - startTime) / 1000));
+        setSecondsRemaining(diff);
+        if (diff === 0) {
+            clearInterval(interval);
         }
-
-        setRiderPos(newPos);
-
-        setPathCoords((prev) => {
-          const last = prev[prev.length - 1];
-          if (!last || getDistance(last[0], last[1], lat, lng) > 0.02) {
-             return [...prev, newPos];
-          }
-          return prev;
-        });
-
-        if (progress < 1) {
-          animationFrameId = requestAnimationFrame(step);
-        } else {
-            setSpeed(0);
-            setEta(0);
-        }
-      };
-      
-      animationFrameId = requestAnimationFrame(step);
-
-      return () => {
-          if (animationFrameId) cancelAnimationFrame(animationFrameId);
-      };
+      }, 1000);
+      return () => clearInterval(interval);
     } else {
-        setRiderPos(restaurantPos)
-        setPathCoords([restaurantPos]);
-        setSpeed(0);
+        setSecondsRemaining(0);
     }
-  }, [isTracking, isDelivered]);
+  }, [order.status, order.movement_start_at]);
+
+  useEffect(() => {
+    const socket = socketService.getSocket();
+    if (!socket || !order._id) return;
+
+    // Join tracking room
+    socket.emit("customerJoinOrder", order._id);
+
+    // Listen for rider updates
+    socket.on("riderLocationUpdate", async (data) => {
+      const { lat, lng, bearing: b, speed: s } = data;
+      const newPos: [number, number] = [lat, lng];
+      
+      // Only update marker position if countdown is finished
+      if (secondsRemaining <= 0) {
+        setRiderPos(newPos);
+        setBearing(b || 0);
+        setSpeed(s || 0);
+      }
+      setIsRiderOffline(false);
+
+      // Fetch road route from OSRM
+      try {
+        const route = await osrmService.getRoute(
+          { lat: restaurantPos[0], lng: restaurantPos[1] },
+          { lat, lng },
+          { lat: customerPos[0], lng: customerPos[1] }
+        );
+        setPathCoords(route.polyline);
+        setEta(route.duration);
+        setDistance(route.distance);
+      } catch (err) {
+        console.error("OSRM update skipped due to throttle or error");
+      }
+    });
+
+    socket.on("riderOffline", () => {
+      setIsRiderOffline(true);
+      toast.warning("Rider Connection Lost", {
+          description: "Rider is offline. Displaying last known position.",
+          duration: 5000
+      });
+    });
+
+    return () => {
+      socket.off("riderLocationUpdate");
+      socket.off("riderOffline");
+    };
+  }, [order._id]);
 
   const pulseCSS = `
     @keyframes pulse-ring {
@@ -196,41 +193,83 @@ const DummyTrackingMap = ({ isTracking, isDelivered }: { isTracking: boolean, is
           maxZoom={19}
         />
         
-        {/* Full Path Guidance Line */}
-        <Polyline positions={[restaurantPos, customerPos]} color="#9ca3af" weight={3} opacity={0.4} dashArray="8, 8" />
+        {/* Road Path Line */}
+        <Polyline positions={pathCoords} color="#f97316" weight={5} opacity={0.9} lineCap="round" lineJoin="round" />
         
-        {/* Live Traveled Path */}
-        <Polyline positions={pathCoords} color="#f97316" weight={5} opacity={0.9} />
-        
+        {/* Markers */}
         <Marker position={restaurantPos} icon={restaurantIcon} />
         <Marker position={customerPos} icon={customerIcon} />
-        {(isTracking || isDelivered) && <Marker position={riderPos} icon={getRiderIcon(bearing)} />}
+        {(isTracking || isDelivered) && (
+          <Marker position={riderPos} icon={getRiderIcon(bearing)} />
+        )}
         
         {isTracking && !isDelivered && <CameraFollow position={riderPos} isTracking={isTracking} />}
       </MapContainer>
       
-      {/* Top Overlay for Speed & ETA */}
-      {isTracking && !isDelivered && (
-        <div className="absolute top-6 left-6 right-6 z-[20] flex justify-between pointer-events-none">
-           <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border border-gray-100 flex items-center gap-3">
-               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.8)]"></div>
-               <span className="text-sm font-black text-gray-800 tracking-widest">{speed} <span className="text-[10px] text-gray-500">KM/H</span></span>
+      {/* Top Overlay for Speed, ETA & Distance */}
+      {(isTracking || isRiderOffline) && !isDelivered && (
+        <div className="absolute top-6 left-6 right-6 z-[20] flex flex-col gap-3 pointer-events-none">
+           <div className="flex justify-between items-start">
+              <div className="flex flex-col gap-2">
+                <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border border-gray-100 flex items-center gap-3">
+                    <div className={`w-2 h-2 ${isRiderOffline ? 'bg-red-500' : 'bg-green-500 animate-pulse'} rounded-full shadow-[0_0_8px_rgba(34,197,94,0.8)]`}></div>
+                    <span className="text-sm font-black text-gray-800 tracking-widest">
+                        {isRiderOffline ? 'OFFLINE' : `${speed} KM/H`}
+                    </span>
+                </div>
+                {distance > 0 && (
+                   <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border border-gray-100 flex items-center gap-2">
+                      <Navigation className="w-3 h-3 text-blue-500" />
+                      <span className="text-[10px] font-black text-gray-700 uppercase tracking-widest">{distance} KM AWAY</span>
+                   </div>
+                )}
+              </div>
+              
+              <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border border-gray-100 flex flex-col items-center min-w-[80px]">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">ETA</span>
+                  <span className="text-sm font-black text-orange-500">{isRiderOffline ? '--' : eta} <span className="text-[10px]">MIN</span></span>
+              </div>
            </div>
-           <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-2xl shadow-lg border border-gray-100 flex flex-col items-center min-w-[80px]">
-               <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">ETA</span>
-               <span className="text-sm font-black text-orange-500">{eta} <span className="text-[10px]">MIN</span></span>
-           </div>
+
+           {secondsRemaining > 0 && (
+             <div className="bg-[#F27C21] text-white px-6 py-3 rounded-2xl shadow-xl border-2 border-white/20 flex flex-col items-center gap-1 self-center animate-pulse">
+                <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 animate-spin-slow" />
+                    <span className="text-sm font-black uppercase tracking-widest">Rider Preparing Departure</span>
+                </div>
+                <span className="text-[10px] font-bold opacity-80 uppercase">Starting in {secondsRemaining} seconds</span>
+             </div>
+           )}
+
+           {isRiderOffline && (
+             <div className="bg-amber-500 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 animate-bounce self-center">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-xs font-black uppercase tracking-widest">Rider Connection Lost</span>
+             </div>
+           )}
         </div>
       )}
 
       {/* Overlay Status inside Map */}
-      <div className="absolute bottom-6 left-6 right-6 z-[20] bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-xl flex items-center gap-4">
+      <div className="absolute bottom-6 left-6 right-6 z-[20] bg-white/95 backdrop-blur-md p-4 rounded-2xl shadow-xl flex items-center gap-4 border border-gray-100">
         <div className={`p-3 rounded-full ${isDelivered ? 'bg-green-100 text-green-600' : isTracking ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-500'}`}>
-            {isDelivered ? <CheckCircle2 className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
+            {isDelivered ? <CheckCircle2 className="w-6 h-6" /> : order.status === 'assigned' ? <UserPlus className="w-6 h-6" /> : <MapPin className="w-6 h-6" />}
         </div>
         <div>
-            <p className="font-black text-gray-900 leading-tight">{isDelivered ? "Successfully Delivered" : isTracking ? "Rider is heading your way" : "Waiting for pickup..."}</p>
-            <p className="text-xs text-gray-500 font-bold mt-1">{isDelivered ? "Enjoy your meal!" : isTracking ? "Arriving shortly. Track live movement." : "Restaurant is preparing your order"}</p>
+            <p className="font-black text-gray-900 leading-tight">
+                {isDelivered ? "Successfully Delivered" : 
+                 secondsRemaining > 0 ? "Warming up engine..." :
+                 order.status === 'assigned' ? "Rider Assigned" :
+                 isTracking ? "Rider is heading your way" : 
+                 "Preparing your order"}
+            </p>
+            <p className="text-xs text-gray-500 font-bold mt-1">
+                {isDelivered ? "Enjoy your meal!" : 
+                 secondsRemaining > 0 ? "Rider is performing safety checks." :
+                 order.status === 'assigned' ? "A professional rider is linked to your order." :
+                 isTracking ? "Arriving shortly. Track live movement." : 
+                 "Restaurant is preparing your order"}
+            </p>
         </div>
       </div>
     </div>
@@ -402,12 +441,12 @@ export default function OrderTrackingPage() {
     })
 
     const getStatusIndex = (status: string) => {
-        const statuses = ['pending', 'confirmed', 'preparing', 'on_the_way', 'out_for_delivery', 'delivered']
+        const statuses = ['pending', 'confirmed', 'assigned', 'preparing', 'picked_up', 'on_the_way', 'delivered']
         const idx = statuses.indexOf(status)
         if (idx === 0) return 0 // Placed
-        if (idx === 1 || idx === 2) return 1 // Confirmed
-        if (idx === 3 || idx === 4) return 2 // On the way
-        if (idx === 5) return 3 // Delivered
+        if (idx >= 1 && idx <= 3) return 1 // Confirmed / Assigned / Preparing
+        if (idx === 4 || idx === 5) return 2 // Picked Up / On the way
+        if (idx === 6) return 3 // Delivered
         return 0
     }
 
@@ -430,12 +469,62 @@ export default function OrderTrackingPage() {
             {/* Convert to 2-column grid to hold Map and Receipt side by side */}
             <div className="w-full max-w-6xl grid xl:grid-cols-2 gap-8 items-start">
                 
-                {/* Left: The Map Component */}
+                {/* Left: The Map Component or Status Card */}
                 <div className="order-2 xl:order-1 h-[500px] xl:h-[700px] w-full rounded-[2.5rem] overflow-hidden shadow-2xl relative xl:sticky top-6">
-                    <DummyTrackingMap 
-                        isTracking={isSimulating ? simulationIdx >= 2 : currentIdx >= 2} 
-                        isDelivered={isSimulating ? simulationIdx >= 3 : currentIdx >= 3} 
-                    />
+                    {order.orderType === "delivery" ? (
+                        <LiveTrackingMap 
+                            order={order}
+                            isTracking={isSimulating ? simulationIdx >= 2 : currentIdx >= 2} 
+                            isDelivered={isSimulating ? simulationIdx >= 3 : currentIdx >= 3} 
+                        />
+                    ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-gray-900 to-slate-800 flex flex-col items-center justify-center p-12 text-center">
+                            <div className="w-32 h-32 bg-white/10 rounded-full flex items-center justify-center mb-8 backdrop-blur-md border border-white/20">
+                                {order.orderType === "dine-in" ? (
+                                    <UtensilsCrossed className="w-16 h-16 text-amber-400" />
+                                ) : (
+                                    <ShoppingBag className="w-16 h-16 text-blue-400" />
+                                )}
+                            </div>
+                            <h2 className="text-4xl font-black text-white mb-4 tracking-tight">
+                                {order.orderType === "dine-in" ? "Table Reserved!" : "Pickup Ready Soon"}
+                            </h2>
+                            <p className="text-gray-400 text-lg max-w-sm font-medium leading-relaxed">
+                                {order.orderType === "dine-in" 
+                                    ? "Your table is being prepared. Just show your digital receipt when you arrive at the restaurant." 
+                                    : "We're preparing your order for collection. You'll receive a notification as soon as it's ready."}
+                            </p>
+                            
+                            {order.orderType === "dine-in" && order.reservationDetails && (
+                                <div className="mt-12 grid grid-cols-2 gap-4 w-full max-w-md">
+                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                                        <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">Guests</p>
+                                        <p className="text-xl font-black text-white">{order.reservationDetails.peopleCount} People</p>
+                                    </div>
+                                    <div className="bg-white/5 p-4 rounded-2xl border border-white/10">
+                                        <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">Time</p>
+                                        <p className="text-xl font-black text-white">
+                                            {new Date(order.reservationDetails.reservationDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {order.orderType === "pickup" && (
+                                <div className="mt-12 p-6 bg-blue-500/10 rounded-[2rem] border border-blue-500/20 w-full max-w-md">
+                                    <div className="flex items-center gap-4 text-left">
+                                        <div className="w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-500/40">
+                                            <MapPin className="w-6 h-6 text-white" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs font-black text-blue-400 uppercase tracking-widest">Collection Point</p>
+                                            <p className="text-sm font-bold text-white leading-tight mt-1">{order.restaurant?.address?.street || "Restaurant Address"}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Right: The Existing Receipt */}
@@ -491,73 +580,140 @@ export default function OrderTrackingPage() {
 
                     <CardContent className="p-8 space-y-8">
                         {/* Customer Details */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100/50">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Phone</p>
-                                <p className="text-sm font-black text-gray-900">{order.contactInfo?.phone || "N/A"}</p>
+                        <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100/50">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Customer</p>
+                                <p className="text-xs font-black text-gray-900 line-clamp-1">{order.customer?.name || "Guest"}</p>
                             </div>
-                            <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100/50">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Order type</p>
-                                <p className="text-sm font-black text-gray-900 capitalize">{order.orderType || "Delivery"}</p>
+                            <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100/50">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Phone</p>
+                                <p className="text-xs font-black text-gray-900">{order.contactInfo?.phone || "N/A"}</p>
+                            </div>
+                            <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100/50">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Mode</p>
+                                <p className="text-xs font-black text-gray-900 capitalize">{order.orderType || "Delivery"}</p>
                             </div>
                         </div>
 
-                        {/* Delivery Address */}
+                        {/* Address or Reservation Info */}
                         <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100/50 flex items-center gap-4">
                             <div className="p-3 bg-white rounded-xl shadow-sm">
-                                <MapPin className="w-5 h-5 text-red-500" />
+                                {order.orderType === "dine-in" ? (
+                                    <Calendar className="w-5 h-5 text-amber-500" />
+                                ) : (
+                                    <MapPin className="w-5 h-5 text-red-500" />
+                                )}
                             </div>
                             <div>
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Delivery Address</p>
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">
+                                    {order.orderType === "dine-in" ? "Reservation Details" : "Location Information"}
+                                </p>
                                 <p className="text-xs font-bold text-gray-800 leading-relaxed italic">
-                                    {order.deliveryAddress?.street || "N/A"}<br />
-                                    {order.deliveryAddress?.city}, {order.deliveryAddress?.state || "Punjab"}
+                                    {order.orderType === "dine-in" ? (
+                                        <>
+                                            <span className="text-gray-900 block mb-1">📍 {order.restaurant?.name || "Restaurant"}</span>
+                                            {order.restaurant?.address?.street || "Restaurant Address"}<br />
+                                            📅 {new Date(order.reservationDetails?.reservationDateTime).toLocaleDateString()} at {new Date(order.reservationDetails?.reservationDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}<br />
+                                            👥 {order.reservationDetails?.peopleCount || 0} People
+                                        </>
+                                    ) : order.orderType === "pickup" ? (
+                                        <>
+                                            Pickup from: {order.restaurant?.name}<br />
+                                            Address: {order.restaurant?.address?.street || "Restaurant Address"}
+                                        </>
+                                    ) : (
+                                        <>
+                                            {order.deliveryAddress?.street || "N/A"}<br />
+                                            {order.deliveryAddress?.city}, {order.deliveryAddress?.state || "Punjab"}
+                                        </>
+                                    )}
                                 </p>
                             </div>
                         </div>
 
                         <div className="h-[1px] w-full bg-gray-100" />
 
+                        {/* Rider Information (NEW) */}
+                        {order.assignedDriver && typeof order.assignedDriver === 'object' && (
+                            <div className="flex items-center justify-between p-4 bg-orange-50/50 border border-orange-100 rounded-2xl shadow-sm">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center shadow-inner border-2 border-white">
+                                        <Bike className="w-5 h-5" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-bold text-orange-400 uppercase tracking-widest">Your Rider</p>
+                                        <p className="text-sm font-black text-gray-800">{(order.assignedDriver as any).name}</p>
+                                    </div>
+                                </div>
+                                <Button 
+                                    size="sm" 
+                                    variant="ghost"
+                                    className="h-8 rounded-xl bg-white hover:bg-gray-50 text-orange-600 border border-orange-200 font-bold text-[10px] px-4 shadow-sm"
+                                    onClick={() => window.location.href = `tel:${(order.assignedDriver as any).phone}`}
+                                >
+                                    <Phone className="w-3 h-3 mr-2" /> CALL RIDER
+                                </Button>
+                            </div>
+                        )}
+
+                        {order.assignedDriver && <div className="h-[1px] w-full bg-gray-100" />}
+
                         {/* Ordered Items */}
                         <div className="space-y-4">
                             <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] mb-4">Ordered Items</p>
-                            {order.items?.map((item: any, idx: number) => (
-                                <div key={idx} className="flex justify-between items-center group">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-6 h-6 rounded-md bg-orange-50 text-orange-500 flex items-center justify-center text-[10px] font-black border border-orange-100">
-                                            {item.quantity}x
+                            {order.items && order.items.length > 0 ? (
+                                order.items.map((item: any, idx: number) => (
+                                    <div key={idx} className="flex justify-between items-center group">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-6 h-6 rounded-md bg-orange-50 text-orange-500 flex items-center justify-center text-[10px] font-black border border-orange-100">
+                                                {item.quantity}x
+                                            </div>
+                                            <p className="text-sm font-bold text-gray-800">{item.name}</p>
                                         </div>
-                                        <p className="text-sm font-bold text-gray-800">{item.name}</p>
+                                        <p className="text-sm font-black text-gray-900">Rs {item.price * item.quantity}</p>
                                     </div>
-                                    <p className="text-sm font-bold text-gray-900">Rs {item.price * item.quantity}</p>
+                                ))
+                            ) : (
+                                <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 flex items-center gap-3">
+                                    <Calendar className="w-5 h-5 text-amber-500" />
+                                    <p className="text-sm font-bold text-amber-700">Table Reservation Only (No food pre-ordered)</p>
                                 </div>
-                            ))}
+                            )}
                         </div>
 
                         <div className="h-[1px] w-full bg-gray-100" />
 
                         {/* Pricing Breakdown */}
                         <div className="space-y-3 px-1">
-                            <div className="flex justify-between text-xs text-gray-500 font-bold">
-                                <span>Subtotal</span>
-                                <span>Rs {subtotal}</span>
-                            </div>
-                            <div className="flex justify-between text-xs text-gray-500 font-bold">
-                                <span>Delivery fee</span>
-                                <span>Rs {deliveryFee}</span>
-                            </div>
-                            <div className="flex justify-between text-xs text-gray-500 font-bold">
-                                <span>Service fee</span>
-                                <span>Rs {serviceFee}</span>
-                            </div>
-                            <div className="flex justify-between text-xs text-gray-500 font-bold">
-                                <span>Tax (8%)</span>
-                                <span>Rs {Math.round(taxAmount)}</span>
-                            </div>
-                            <div className="pt-3 flex justify-between items-end">
-                                <span className="text-sm font-black text-gray-800">Total</span>
-                                <span className="text-2xl font-black text-orange-500">Rs {Math.round(total)}</span>
-                            </div>
+                            {subtotal > 0 ? (
+                                <>
+                                    <div className="flex justify-between text-xs text-gray-500 font-bold">
+                                        <span>Subtotal</span>
+                                        <span>Rs {subtotal}</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs text-gray-500 font-bold">
+                                        <span>Delivery fee</span>
+                                        <span>Rs {deliveryFee}</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs text-gray-500 font-bold">
+                                        <span>Service fee</span>
+                                        <span>Rs {serviceFee}</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs text-gray-500 font-bold">
+                                        <span>Tax (8%)</span>
+                                        <span>Rs {Math.round(taxAmount)}</span>
+                                    </div>
+                                    <div className="pt-3 flex justify-between items-end border-t border-gray-50 mt-2">
+                                        <span className="text-sm font-black text-gray-800">Total</span>
+                                        <span className="text-2xl font-black text-orange-500">Rs {Math.round(total)}</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="pt-3 flex justify-between items-end">
+                                    <span className="text-sm font-black text-gray-800">Booking Fee</span>
+                                    <span className="text-2xl font-black text-emerald-500 uppercase tracking-widest">FREE</span>
+                                </div>
+                            )}
                         </div>
 
                         {/* Payment Info */}

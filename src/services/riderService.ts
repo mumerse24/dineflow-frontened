@@ -6,15 +6,15 @@ export const riderService = {
         const response = await api.post("/auth/login", { email, password })
         const data = response.data
         if (data.success && data.data?.user?.role === "rider") {
-            localStorage.setItem("riderToken", data.data.token)
-            localStorage.setItem("riderData", JSON.stringify(data.data.user))
+            sessionStorage.setItem("riderToken", data.data.token)
+            sessionStorage.setItem("riderData", JSON.stringify(data.data.user))
         }
         return data
     },
 
     logout: () => {
-        localStorage.removeItem("riderToken")
-        localStorage.removeItem("riderData")
+        sessionStorage.removeItem("riderToken")
+        sessionStorage.removeItem("riderData")
     },
 
     // ============ Orders ============

@@ -29,7 +29,7 @@ import {
 } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useDispatch, useSelector } from "react-redux"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
 import { AppDispatch, RootState } from "@/store/store"
 import {
     fetchRiderOrders,
@@ -50,6 +50,10 @@ type Tab = "active" | "history" | "earnings" | "map" | "profile" | "support"
 type SubTab = "all" | "pickup" | "delivering"
 
 const ORDER_FLOW = {
+    assigned: {
+        label: "Accept Order",
+        next: "accepted",
+    },
     accepted: {
         label: "Complete Pickup",
         next: "picked_up",
@@ -69,19 +73,22 @@ const ORDER_FLOW = {
 }
 
 const RiderDashboard = () => {
-    const [activeTab, setActiveTab] = useState<Tab>("active")
+    const [searchParams, setSearchParams] = useSearchParams()
+    const initialTab = (searchParams.get("tab") as Tab) || "active"
+    const [activeTab, setActiveTab] = useState<Tab>(initialTab)
     const [subTab, setSubTab] = useState<SubTab>("all")
     const [updatingId, setUpdatingId] = useState<string | null>(null)
     const [selectedChatOrder, setSelectedChatOrder] = useState<string | null>(null)
     const [searchQuery, setSearchQuery] = useState("")
     const [filterStatus, setFilterStatus] = useState("all")
+    const [cosmeticCountdown, setCosmeticCountdown] = useState<{ id: string, seconds: number } | null>(null)
 
     const dispatch = useDispatch<AppDispatch>()
     const navigate = useNavigate()
     const { orders, profile, isLoading } = useSelector((state: RootState) => state.rider)
     const { user: authUser } = useSelector((state: RootState) => state.auth)
     const [history, setHistory] = useState<any[]>([])
-    const riderData = JSON.parse(localStorage.getItem("riderData") || "{}")
+    const riderData = JSON.parse(sessionStorage.getItem("riderData") || "{}")
 
     // Check for role mismatch
     useEffect(() => {
@@ -106,7 +113,7 @@ const RiderDashboard = () => {
     });
 
     useEffect(() => {
-        if (!localStorage.getItem("riderToken")) {
+        if (!sessionStorage.getItem("riderToken")) {
             navigate("/rider/login", { replace: true })
             return
         }
@@ -117,18 +124,21 @@ const RiderDashboard = () => {
     useEffect(() => {
         const socket = socketService.connect()
         if (socket) {
-            socket.on("orderAssignedToRider", (data: { riderId: string; order: any }) => {
-                if (data.riderId === riderData?._id || data.riderId === profile?._id) {
-                    dispatch(addAssignedOrder(data.order))
-                    toast.success("🚀 New Order Assigned!", {
-                        description: `Pick up from ${data.order.restaurant?.name || "Restaurant"}`,
-                        duration: 10000
-                    });
-                    try {
-                        new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play();
-                    } catch (e) {
-                        console.error("Audio error:", e);
-                    }
+            // Join personal room for targeted assignments
+            if (authUser?._id) {
+                socket.emit("joinUser", authUser._id);
+            }
+
+            socket.on("order:assigned", (order: any) => {
+                dispatch(addAssignedOrder(order))
+                toast.success("🚀 New Order Assigned!", {
+                    description: `Pick up from ${order.restaurant?.name || "Restaurant"}`,
+                    duration: 10000
+                });
+                try {
+                    new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3").play();
+                } catch (e) {
+                    console.error("Audio error:", e);
                 }
             })
         }
@@ -157,6 +167,9 @@ const RiderDashboard = () => {
         }
     }, [profile?._id, riderData?._id, dispatch])
 
+    const [watchId, setWatchId] = useState<number | null>(null);
+    const [lastEmitTime, setLastEmitTime] = useState(0);
+
     useEffect(() => {
         if (activeTab === "history") {
             dispatch(fetchRiderHistory()).then((res: any) => {
@@ -165,16 +178,99 @@ const RiderDashboard = () => {
         }
     }, [activeTab, dispatch])
 
+    // 📍 LIVE TRACKING: Watch position and emit updates
+    useEffect(() => {
+        const socket = socketService.getSocket();
+        if (!socket || orders.length === 0) return;
+
+        // Find active order that needs tracking
+        const trackingOrder = orders.find((o: any) => ["on_the_way", "out_for_delivery"].includes(o.status));
+
+        if (trackingOrder) {
+            // Join tracking room
+            socket.emit("riderJoinOrder", trackingOrder._id);
+
+            // Start watching position
+            if (navigator.geolocation) {
+                const id = navigator.geolocation.watchPosition(
+                    (position) => {
+                        const now = Date.now();
+                        // Throttle emits to every 4 seconds
+                        if (now - lastEmitTime > 4000) {
+                            socket.emit("updateRiderLocation", {
+                                orderId: trackingOrder._id,
+                                lat: position.coords.latitude,
+                                lng: position.coords.longitude,
+                                bearing: position.coords.heading || 0,
+                                speed: Math.round((position.coords.speed || 0) * 3.6), // m/s to km/h
+                                timestamp: now
+                            });
+                            setLastEmitTime(now);
+                        }
+                    },
+                    (error) => {
+                        console.error("GPS Watch Error:", error);
+                        if (error.code === 1) { // PERMISSION_DENIED
+                            toast.error("Location Access Required", {
+                                description: "Please enable GPS to track your delivery progress.",
+                                duration: 10000
+                            });
+                        }
+                    },
+                    { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 }
+                );
+                setWatchId(id);
+            }
+        } else {
+            // Stop watching if no active delivery
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                setWatchId(null);
+            }
+        }
+
+        return () => {
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+        };
+    }, [orders, lastEmitTime]);
+
     const handleStatusUpdate = async (orderId: string, status: string) => {
         setUpdatingId(orderId)
-        await dispatch(updateRiderOrderStatus({ orderId, status }))
-        setUpdatingId(null)
+        try {
+            await dispatch(updateRiderOrderStatus({ orderId, status })).unwrap()
+            toast.success(`Order status updated to ${status.replace("_", " ")}`)
+            
+            // Cosmetic countdown for movement
+            if (status === "on_the_way") {
+                setCosmeticCountdown({ id: orderId, seconds: 10 })
+                const interval = setInterval(() => {
+                    setCosmeticCountdown(prev => {
+                        if (!prev || prev.id !== orderId || prev.seconds <= 1) {
+                            clearInterval(interval)
+                            return null
+                        }
+                        return { ...prev, seconds: prev.seconds - 1 }
+                    })
+                }, 1000)
+            }
+        } catch (err: any) {
+            toast.error(err || "Failed to update status")
+        } finally {
+            setUpdatingId(null)
+        }
     }
 
     const handleStatusToggle = async () => {
         if (!profile) return
         const newStatus = profile.riderStatus === "available" ? "offline" : "available"
         await dispatch(toggleRiderStatus(newStatus))
+    }
+
+    const handleTabChange = (tab: Tab) => {
+        setActiveTab(tab)
+        setSearchParams({ tab })
     }
 
     const handleLogout = () => {
@@ -285,7 +381,7 @@ const RiderDashboard = () => {
                     <div className="bg-white rounded-3xl p-4 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
                         <div className="space-y-1 mb-6">
                             <button
-                                onClick={() => setActiveTab("active")}
+                                onClick={() => handleTabChange("active")}
                                 className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-colors ${activeTab === "active" ? "bg-orange-50 text-[#F27C21]" : "text-gray-500 hover:bg-gray-50"}`}
                             >
                                 <div className="flex items-center gap-3 font-semibold text-sm">
@@ -298,7 +394,7 @@ const RiderDashboard = () => {
                                 )}
                             </button>
                             <button
-                                onClick={() => setActiveTab("history")}
+                                onClick={() => handleTabChange("history")}
                                 className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-colors ${activeTab === "history" ? "bg-orange-50 text-[#F27C21]" : "text-gray-500 hover:bg-gray-50"}`}
                             >
                                 <div className="flex items-center gap-3 font-semibold text-sm">
@@ -306,7 +402,7 @@ const RiderDashboard = () => {
                                 </div>
                             </button>
                             <button
-                                onClick={() => setActiveTab("earnings")}
+                                onClick={() => handleTabChange("earnings")}
                                 className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-colors ${activeTab === "earnings" ? "bg-orange-50 text-[#F27C21]" : "text-gray-500 hover:bg-gray-50"}`}
                             >
                                 <div className="flex items-center gap-3 font-semibold text-sm">
@@ -314,7 +410,7 @@ const RiderDashboard = () => {
                                 </div>
                             </button>
                             <button
-                                onClick={() => setActiveTab("map")}
+                                onClick={() => handleTabChange("map")}
                                 className={`w-full flex items-center justify-between px-4 py-3 rounded-2xl transition-colors ${activeTab === "map" ? "bg-orange-50 text-[#F27C21]" : "text-gray-500 hover:bg-gray-50"}`}
                             >
                                 <div className="flex items-center gap-3 font-semibold text-sm">
@@ -326,13 +422,13 @@ const RiderDashboard = () => {
                         <p className="px-4 text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Account</p>
                         <div className="space-y-1">
                             <button
-                                onClick={() => setActiveTab("profile")}
+                                onClick={() => handleTabChange("profile")}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-semibold text-sm transition-colors ${activeTab === "profile" ? "bg-orange-50 text-[#F27C21]" : "text-gray-500 hover:bg-gray-50"}`}
                             >
                                 <UserCircle className="w-5 h-5" /> My Profile
                             </button>
                             <button
-                                onClick={() => setActiveTab("support")}
+                                onClick={() => handleTabChange("support")}
                                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl font-semibold text-sm transition-colors ${activeTab === "support" ? "bg-red-50 text-red-500" : "text-gray-500 hover:bg-red-50 hover:text-red-500"}`}
                             >
                                 <LifeBuoy className="w-5 h-5" /> Support
@@ -398,7 +494,7 @@ const RiderDashboard = () => {
                                         Delivering
                                     </button>
                                     <button
-                                        onClick={() => setActiveTab("history")}
+                                        onClick={() => handleTabChange("history")}
                                         className="px-4 py-1.5 rounded-full text-xs font-bold text-[#F27C21] hover:bg-white/50 transition-all flex items-center gap-1 ml-1"
                                     >
                                         History <ChevronRight className="w-3 h-3" />
@@ -533,19 +629,26 @@ const RiderDashboard = () => {
                                                             )}
 
                                                             {flowConfig && (
-                                                                <button
-                                                                    disabled={updatingId === order._id}
-                                                                    onClick={() => handleStatusUpdate(order._id, flowConfig.next)}
-                                                                    className="px-6 py-3 rounded-xl bg-[#F27C21] text-white font-bold text-sm hover:brightness-105 shadow-lg shadow-orange-500/30 transition-all flex items-center gap-2 flex-1 md:flex-none justify-center"
-                                                                >
-                                                                    {updatingId === order._id ? (
-                                                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                                                    ) : (
-                                                                        <>
-                                                                            {flowConfig.label} <ChevronRight className="w-4 h-4" />
-                                                                        </>
+                                                                <div className="flex flex-col items-center gap-3 flex-1 md:flex-none">
+                                                                    {cosmeticCountdown?.id === order._id && (
+                                                                        <div className="text-[10px] font-black text-orange-500 uppercase tracking-tighter animate-pulse">
+                                                                            Visible to customer in {cosmeticCountdown?.seconds}s
+                                                                        </div>
                                                                     )}
-                                                                </button>
+                                                                    <button
+                                                                        disabled={updatingId === order._id || (cosmeticCountdown?.id === order._id)}
+                                                                        onClick={() => handleStatusUpdate(order._id, flowConfig.next)}
+                                                                        className="px-6 py-3 rounded-xl bg-[#F27C21] text-white font-bold text-sm hover:brightness-105 shadow-lg shadow-orange-500/30 transition-all flex items-center gap-2 w-full justify-center"
+                                                                    >
+                                                                        {updatingId === order._id ? (
+                                                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                                                        ) : (
+                                                                            <>
+                                                                                {flowConfig.label} <ChevronRight className="w-4 h-4" />
+                                                                            </>
+                                                                        )}
+                                                                    </button>
+                                                                </div>
                                                             )}
                                                         </div>
                                                     </div>

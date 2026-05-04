@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/badge"
 import { motion } from "framer-motion"
 import { useNavigate } from "react-router-dom"
 import api from "@/services/api"
-import { addToCartServer } from "@/store/slices/cartSlice"
+import { addToCartServer, setOrderType } from "@/store/slices/cartSlice"
+import { fetchRestaurants } from "@/store/slices/restaurantSlice"
 import { toast } from "sonner"
 
 const DEFAULT_CATEGORIES = [
@@ -35,8 +36,16 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [categories, setCategories] = useState<any[]>([])
 
+  // Role-based redirection is now handled via explicit navigation in the Header or by protected routes.
+  // This allows users to stay on the page they are currently viewing after a refresh.
+
+
+  const { restaurants } = useSelector((state: RootState) => state.restaurants)
+  const [primaryRestaurantId, setPrimaryRestaurantId] = useState<string | null>(null)
+
   useEffect(() => {
     dispatch(fetchOrders({ limit: 5 }))
+    dispatch(fetchRestaurants({ limit: 1 })) // Fetch only the first restaurant
     
     // Fetch dynamic categories
     const fetchCategories = async () => {
@@ -145,25 +154,21 @@ export default function HomePage() {
                 >
                   Find Food
                 </button>
+                <button 
+                  onClick={() => {
+                    const primaryId = "697234df784aef4faaeec4a9"; // Enforced Single Restaurant ID
+                    dispatch(setOrderType('dine-in'));
+                    navigate('/checkout', { state: { restaurantId: primaryId, orderType: 'dine-in' } });
+                    toast.success("Dine-In Reservation flow activated!");
+                  }}
+                  className="h-14 px-8 rounded-2xl bg-white/20 hover:bg-white/30 text-white font-bold text-lg border border-white/30 backdrop-blur-sm shadow-xl hover:-translate-y-1 transition-all active:scale-95 whitespace-nowrap flex items-center gap-2"
+                >
+                  <Utensils size={20} />
+                  Dine-In
+                </button>
               </div>
             </div>
 
-            <div className="hidden lg:block">
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-                <div className="flex items-center gap-3 text-white mb-2">
-                  <MapPin className="text-amber-300" size={20} />
-                  <span className="font-semibold">Deliver to</span>
-                </div>
-                <p className="text-amber-50 text-sm opacity-80 max-w-[200px] truncate">
-                  {user?.address?.street 
-                    ? `${user.address.street}, ${user.address.city || ''}` 
-                    : typeof user?.address === 'string' ? user.address : "No address set yet"}
-                </p>
-                <Button variant="link" className="text-amber-300 p-0 h-auto mt-2 font-bold hover:text-white">
-                  Change Address <ChevronRight size={16} />
-                </Button>
-              </div>
-            </div>
           </div>
           
           {/* Decorative elements */}

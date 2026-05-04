@@ -173,12 +173,13 @@ export interface Order {
     transactionId?: string
     paidAt?: string
   }
-  status: "pending" | "confirmed" | "preparing" | "ready" | "picked_up" | "out_for_delivery" | "delivered" | "cancelled" | "rejected" | "refunded"
+  status: "pending" | "confirmed" | "assigned" | "preparing" | "ready" | "picked_up" | "on_the_way" | "out_for_delivery" | "delivered" | "cancelled" | "rejected" | "refunded"
   orderType: "delivery" | "pickup" | "dine-in"
   estimatedDeliveryTime: string
   actualDeliveryTime?: string
+  movement_start_at?: string
   specialInstructions?: string
-  rider?: string | User
+  assignedDriver?: string | User
   createdAt: string
   updatedAt: string
 }

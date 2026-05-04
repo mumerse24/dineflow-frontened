@@ -18,8 +18,8 @@ export const loginUser = createAsyncThunk(
         return rejectWithValue("Access denied. Please use the Admin dashboard to login.")
       }
 
-      localStorage.setItem("token", token)
-      localStorage.setItem("user", JSON.stringify(user))
+      sessionStorage.setItem("token", token)
+      sessionStorage.setItem("user", JSON.stringify(user))
       return { user, token }
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || "Login failed")
@@ -43,8 +43,8 @@ export const registerUser = createAsyncThunk(
     try {
       const response = await api.post<ApiResponse<{ user: User; token: string }>>("/auth/register", userData)
       const { user, token } = response.data.data
-      localStorage.setItem("token", token)
-      localStorage.setItem("user", JSON.stringify(user))
+      sessionStorage.setItem("token", token)
+      sessionStorage.setItem("user", JSON.stringify(user))
       return { user, token }
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || "Registration failed")
@@ -65,10 +65,8 @@ export const loginAdmin = createAsyncThunk(
           return rejectWithValue("Access denied. Not an admin account.")
         }
 
-        localStorage.setItem("token", response.token)
-        localStorage.setItem("user", JSON.stringify(user))
-        localStorage.setItem("adminToken", response.token)
-        localStorage.setItem("adminData", JSON.stringify(user))
+        sessionStorage.setItem("adminToken", response.token)
+        sessionStorage.setItem("adminData", JSON.stringify(user))
         return { user, token: response.token }
       }
       return rejectWithValue(response.message || "Admin login failed")
@@ -92,8 +90,8 @@ export const riderLogin = createAsyncThunk(
       if (user?.role !== "rider") return rejectWithValue("Access denied: Not a rider account")
       
       // Sync to general storage for unified auth state
-      localStorage.setItem("token", token)
-      localStorage.setItem("user", JSON.stringify(user))
+      sessionStorage.setItem("riderToken", token)
+      sessionStorage.setItem("riderData", JSON.stringify(user))
       
       return { user, token }
     } catch (error: any) {
@@ -111,7 +109,7 @@ export const updateProfile = createAsyncThunk(
     try {
       const response = await api.put<ApiResponse<User>>("/auth/profile", userData)
       const user = response.data.data
-      localStorage.setItem("user", JSON.stringify(user))
+      sessionStorage.setItem("user", JSON.stringify(user))
       return user
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || "Profile update failed")
@@ -140,7 +138,15 @@ export const getProfile = createAsyncThunk(
     try {
       const response = await api.get<ApiResponse<User>>("/auth/me")
       const user = (response.data as any).user || response.data.data
-      localStorage.setItem("user", JSON.stringify(user))
+      
+      // Save to role-specific key to avoid session mixing
+      if (user.role === "admin" || user.role === "superadmin") {
+        sessionStorage.setItem("adminData", JSON.stringify(user))
+      } else if (user.role === "rider") {
+        sessionStorage.setItem("riderData", JSON.stringify(user))
+      } else {
+        sessionStorage.setItem("user", JSON.stringify(user))
+      }
       return user
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || "Failed to fetch profile")

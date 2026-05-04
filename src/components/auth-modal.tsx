@@ -37,6 +37,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
   })
   const [resetSent, setResetSent] = useState(false)
   const [resetLoading, setResetLoading] = useState(false)
+  const [resetUrl, setResetUrl] = useState<string | null>(null)
 
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
@@ -86,6 +87,7 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
       })
       setResetSent(false)
       setResetLoading(false)
+      setResetUrl(null)
     }
   }, [isOpen, mode, dispatch, location.state])
 
@@ -163,6 +165,9 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
 
       if (data.success) {
         setResetSent(true)
+        if (data.resetUrl) {
+          setResetUrl(data.resetUrl)
+        }
         toast.success("Success!", {
           description: "Password reset link has been sent to your email."
         })
@@ -205,11 +210,33 @@ export function AuthModal({ isOpen, onClose, mode, onModeChange }: AuthModalProp
                 <p className="text-sm text-muted-foreground px-4">
                   We've sent a password reset link to <span className="font-semibold text-foreground">{formData.email}</span>.
                 </p>
+                {resetUrl && (
+                  <div className="mt-4 p-4 bg-amber-50 rounded-lg border border-amber-200">
+                    <p className="text-sm text-amber-800 font-medium mb-3">Dev Mode: Email not configured.</p>
+                    <Button 
+                      onClick={() => {
+                        onClose();
+                        try {
+                          // Extract just the pathname from the absolute URL to use SPA navigation
+                          const path = new URL(resetUrl).pathname;
+                          navigate(path);
+                        } catch (e) {
+                          // Fallback to full page reload if URL parsing fails
+                          window.location.href = resetUrl;
+                        }
+                      }} 
+                      className="w-full bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold"
+                    >
+                      Click here to reset password
+                    </Button>
+                  </div>
+                )}
                 <Button 
                   variant="outline" 
                   className="w-full mt-4"
                   onClick={() => {
                     setResetSent(false)
+                    setResetUrl(null)
                     onModeChange("signin")
                   }}
                 >
