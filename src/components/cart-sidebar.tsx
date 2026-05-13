@@ -104,6 +104,11 @@ export function CartSidebar() {
 
   // Navigate to checkout
   const handleCheckout = () => {
+    if (currentGroupOrder) {
+      setSheetOpen(false)
+      navigate(`/group-order/${currentGroupOrder.inviteCode}`)
+      return
+    }
     if (items.length === 0) {
       toast.error("Your cart is empty!")
       return
@@ -189,9 +194,31 @@ export function CartSidebar() {
           </button>
         </div>
 
+        {/* Group Order Active Indicator in Sidebar */}
+        {currentGroupOrder && (
+          <div className="mx-4 my-4 p-5 bg-orange-600 rounded-[32px] text-white shadow-xl shadow-orange-100 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-white/70">Group Session</p>
+                <h4 className="text-sm font-black uppercase tracking-tight">{currentGroupOrder.inviteCode}</h4>
+              </div>
+            </div>
+            <Button 
+              size="sm" 
+              className="bg-white text-orange-600 hover:bg-orange-50 font-black uppercase tracking-widest text-[9px] h-8 rounded-xl border-none"
+              onClick={() => { setSheetOpen(false); navigate(`/group-order/${currentGroupOrder.inviteCode}`); }}
+            >
+              View Group
+            </Button>
+          </div>
+        )}
+
         {/* Items List */}
         <div className="flex-1 overflow-y-auto p-4 bg-[#fffaf5]/30 no-scrollbar">
-          {items.length === 0 ? (
+          {items.length === 0 && !currentGroupOrder ? (
             <div className="h-full flex flex-col items-center justify-center text-center p-8">
               <div className="w-20 h-20 bg-orange-100 rounded-[28px] flex items-center justify-center mb-6 rotate-3">
                 <ShoppingCart className="w-8 h-8 text-[#FF5C00] opacity-40" />
@@ -320,18 +347,20 @@ export function CartSidebar() {
         </div>
 
         {/* Footer */}
-        {items.length > 0 && (
+        {(items.length > 0 || currentGroupOrder) && (
           <div className="p-6 bg-white border-t border-orange-50">
-            <div className="space-y-2 mb-6">
-              <div className="flex justify-between items-center text-gray-400 font-bold text-[10px] uppercase tracking-widest">
-                <span>Subtotal</span>
-                <span>Rs. {totalAmount.toFixed(0)}</span>
+            {items.length > 0 && (
+              <div className="space-y-2 mb-6">
+                <div className="flex justify-between items-center text-gray-400 font-bold text-[10px] uppercase tracking-widest">
+                  <span>Subtotal</span>
+                  <span>Rs. {totalAmount.toFixed(0)}</span>
+                </div>
+                <div className="flex justify-between items-center text-gray-900 font-black text-lg uppercase tracking-tight">
+                  <span>Total Amount</span>
+                  <span className="text-[#FF5C00]">Rs. {totals.total.toFixed(0)}</span>
+                </div>
               </div>
-              <div className="flex justify-between items-center text-gray-900 font-black text-lg uppercase tracking-tight">
-                <span>Total Amount</span>
-                <span className="text-[#FF5C00]">Rs. {totals.total.toFixed(0)}</span>
-              </div>
-            </div>
+            )}
 
             <div className="space-y-3">
               <Button
@@ -341,7 +370,7 @@ export function CartSidebar() {
               >
                 {isAnyLoading ? "Syncing..." : (
                   <>
-                    Proceed to Checkout
+                    {currentGroupOrder ? "View Combined Group Order" : "Proceed to Checkout"}
                     <ArrowRight className="w-5 h-5" />
                   </>
                 )}

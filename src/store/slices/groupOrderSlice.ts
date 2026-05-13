@@ -50,12 +50,38 @@ export const joinGroupOrder = createAsyncThunk(
     }
 )
 
+export const addItemToGroupOrder = createAsyncThunk(
+    "groupOrder/addItem",
+    async ({ inviteCode, menuItemId, quantity, customizations, specialInstructions }: { 
+        inviteCode: string, 
+        menuItemId: string, 
+        quantity: number,
+        customizations?: any[],
+        specialInstructions?: string
+    }, { rejectWithValue }) => {
+        try {
+            const response = await api.post<ApiResponse<any>>(`/group-orders/${inviteCode}/add-item`, {
+                menuItemId,
+                quantity,
+                customizations,
+                specialInstructions
+            })
+            return response.data.data
+        } catch (error: any) {
+            return rejectWithValue(error.response?.data?.message || "Failed to add item to group order")
+        }
+    }
+)
+
 const groupOrderSlice = createSlice({
     name: "groupOrder",
     initialState,
     reducers: {
         clearGroupOrder: (state) => {
             state.currentGroupOrder = null
+        },
+        setGroupOrder: (state, action) => {
+            state.currentGroupOrder = action.payload
         }
     },
     extraReducers: (builder) => {
@@ -73,8 +99,11 @@ const groupOrderSlice = createSlice({
             .addCase(joinGroupOrder.fulfilled, (state, action) => {
                 state.currentGroupOrder = action.payload
             })
+            .addCase(addItemToGroupOrder.fulfilled, (state, action) => {
+                state.currentGroupOrder = action.payload
+            })
     }
 })
 
-export const { clearGroupOrder } = groupOrderSlice.actions
+export const { clearGroupOrder, setGroupOrder } = groupOrderSlice.actions
 export default groupOrderSlice.reducer

@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom"
 import { useAppSelector, useAppDispatch } from "@/store/hooks"
 import type { MenuItem, Filters } from "@/types"
 import { addToCartServer } from "@/store/slices/cartSlice"
+import { addItemToGroupOrder } from "@/store/slices/groupOrderSlice"
 import { deleteMenuItem } from "@/store/slices/menuSlice"
 import { Edit, Trash2, Image as ImageIcon, Plus } from "lucide-react"
 import { DishDetailModal } from "./dish-detail-modal"
@@ -51,6 +52,7 @@ interface RestaurantMenuProps {
 export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps) {
   const { items: menuItems, isLoading } = useAppSelector((state) => state.menu)
   const cartState = useAppSelector((state) => state.cart)
+  const { currentGroupOrder } = useAppSelector((state) => state.groupOrder)
   const user = useAppSelector((state) => state.auth.user) // Get current user
   const dispatch = useAppDispatch()
   const navigate = useNavigate()
@@ -195,15 +197,27 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
     }, 8000);
 
     try {
-      await dispatch(
-        addToCartServer({
-          menuItemId: validId,
-          quantity: 1,
-          restaurantId,
-        })
-      ).unwrap();
-
-      toast.success(`${item.name} added to cart!`);
+      if (currentGroupOrder && currentGroupOrder.status === "open") {
+        // If in a group order, add to group order session
+        await dispatch(
+          addItemToGroupOrder({
+            inviteCode: currentGroupOrder.inviteCode,
+            menuItemId: validId,
+            quantity: 1,
+          })
+        ).unwrap();
+        toast.success(`${item.name} added to GROUP order!`);
+      } else {
+        // Regular cart add
+        await dispatch(
+          addToCartServer({
+            menuItemId: validId,
+            quantity: 1,
+            restaurantId,
+          })
+        ).unwrap();
+        toast.success(`${item.name} added to cart!`);
+      }
     } catch (error: any) {
       const msg = typeof error === 'string' ? error : error?.message || "Failed to add to cart";
       toast.error(msg);

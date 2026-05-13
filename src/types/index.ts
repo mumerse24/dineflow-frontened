@@ -236,3 +236,25 @@ export interface Feedback {
   createdAt: string
   updatedAt: string
 }
+
+export interface GroupOrderMember {
+  user: string
+  name: string
+  items: Array<{
+    menuItem: MenuItem
+    quantity: number
+    customizations?: any[]
+    specialInstructions?: string
+  }>
+}
+
+export interface GroupOrder {
+  _id: string
+  host: string
+  restaurant: Restaurant
+  inviteCode: string
+  status: "open" | "closed" | "completed"
+  members: GroupOrderMember[]
+  createdAt: string
+  updatedAt: string
+}

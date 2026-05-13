@@ -12,6 +12,7 @@ import { getProfile } from "@/store/thunks/authThunks"
 import { useLocation } from "react-router-dom"
 import socketService from "@/services/socket"
 import { toast } from "sonner"
+import { Users, ArrowRight } from "lucide-react"
 
 export function Header() {
   const [authModalOpen, setAuthModalOpen] = useState(false)
@@ -24,6 +25,7 @@ export function Header() {
   const riderToken = sessionStorage.getItem("riderToken")
 
   const { isAuthenticated, user, isLoading, profileFetched } = useSelector((state: any) => state.auth)
+  const { currentGroupOrder } = useSelector((state: any) => state.groupOrder)
 
   const openSignIn = () => {
     setAuthMode("signin")
@@ -93,6 +95,27 @@ export function Header() {
 
   return (
     <header className="bg-background/95 backdrop-blur-sm border-b border-border sticky top-0 z-50">
+      {/* Group Order Active Banner */}
+      {currentGroupOrder && currentGroupOrder.status === "open" && (
+        <div className="bg-orange-600 text-white py-2 px-4 shadow-lg flex items-center justify-center gap-4 animate-in slide-in-from-top duration-500">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 animate-pulse" />
+            <span className="text-[10px] md:text-xs font-black uppercase tracking-widest">Group Order Active</span>
+          </div>
+          <div className="h-4 w-px bg-white/20 hidden md:block" />
+          <span className="text-[10px] md:text-xs font-bold text-white/90">
+            Joining {currentGroupOrder.restaurant?.name || "Restaurant"} • Code: <span className="font-black text-white">{currentGroupOrder.inviteCode}</span>
+          </span>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => navigate(`/group-order/${currentGroupOrder.inviteCode}`)}
+            className="h-7 px-3 bg-white/10 hover:bg-white/20 text-white border-none rounded-full text-[10px] font-black uppercase tracking-widest"
+          >
+            Manage <ArrowRight className="w-3 h-3 ml-1" />
+          </Button>
+        </div>
+      )}
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
           {/* Logo */}
