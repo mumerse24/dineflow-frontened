@@ -244,7 +244,7 @@ export function AdminDashboard() {
     try {
       // NOTE: Create Rider action needs to be added to adminSlice, but for now we fallback to direct fetch
       // if it's not implemented in the slice yet.
-      const response = await fetch("http://localhost:5000/api/admin/riders", {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/admin/riders`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
