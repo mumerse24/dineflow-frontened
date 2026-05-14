@@ -120,7 +120,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-gray-50/50">
       <Header />
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-8 space-y-10">
         
         {/* 👋 Welcome & Search Section */}
         <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 md:p-8 lg:p-12 shadow-2xl">

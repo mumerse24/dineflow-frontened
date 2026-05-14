@@ -174,7 +174,7 @@ export default function MenuPage() {
       <main className="pt-20 bg-[#fff9f5]">
         {/* Premium Banner */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-          <div className="relative h-[420px] flex items-center overflow-hidden rounded-[48px] bg-gradient-to-br from-[#FF5C00] via-[#FF7A00] to-[#FF4D00] shadow-2xl shadow-orange-900/20">
+          <div className="relative h-auto py-12 sm:py-0 sm:h-[420px] flex items-center overflow-hidden rounded-3xl sm:rounded-[48px] bg-gradient-to-br from-[#FF5C00] via-[#FF7A00] to-[#FF4D00] shadow-2xl shadow-orange-900/20">
             {/* Decorative Patterns */}
             <div className="absolute inset-0 opacity-10 pointer-events-none">
               <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-white rounded-full blur-[120px] -translate-y-1/2 translate-x-1/2" />
@@ -188,11 +188,11 @@ export default function MenuPage() {
                 transition={{ duration: 0.8 }}
                 className="max-w-2xl"
               >
-                <h1 className="text-4xl md:text-5xl lg:text-7xl font-black text-white mb-4 sm:mb-6 tracking-tighter leading-[0.9] drop-shadow-2xl">
+                <h1 className="text-3xl md:text-5xl lg:text-7xl font-black text-white mb-4 sm:mb-6 tracking-tighter leading-[0.9] drop-shadow-2xl">
                   Welcome back,<br />
                   <span className="text-white/80">{authUser?.name?.split(' ')[0] || 'Foodie'}!</span>
                 </h1>
-                <p className="text-white/90 text-lg md:text-xl font-bold mb-10 leading-relaxed max-w-lg">
+                <p className="text-white/90 text-base sm:text-lg md:text-xl font-bold mb-6 sm:mb-10 leading-relaxed max-w-lg">
                   What's on your mind today? We've got the best deals ready for you.
                 </p>
 

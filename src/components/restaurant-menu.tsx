@@ -314,7 +314,7 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
                 View All →
               </button>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-10">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-10">
               {finalItems.map((item) => renderMenuItem(item))}
             </div>
           </div>
@@ -357,21 +357,21 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
           setSelectedDish(item);
           setIsDetailModalOpen(true);
         }}
-        className="flex flex-col h-full bg-white rounded-[48px] shadow-2xl shadow-orange-900/5 overflow-hidden border border-orange-50 hover:shadow-orange-900/10 transition-all duration-500 group cursor-pointer relative"
+        className="flex flex-col h-full bg-white rounded-3xl sm:rounded-[48px] shadow-2xl shadow-orange-900/5 overflow-hidden border border-orange-50 hover:shadow-orange-900/10 transition-all duration-500 group cursor-pointer relative"
       >
         {/* Image Area */}
-        <div className="h-64 relative bg-[#fffaf5] overflow-hidden">
+        <div className="h-40 sm:h-64 relative bg-[#fffaf5] overflow-hidden">
           <ImageWithSkeleton src={getImageUrl(item)} alt={item.name} />
           
           {/* Top Badges */}
           <div className="absolute top-6 right-6 flex flex-col gap-2 items-end">
             {badges.map((badge, i) => (
-                <div key={i} className="bg-[#FF5C00] text-white px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl border border-white/20 backdrop-blur-sm">
+                <div key={i} className="bg-[#FF5C00] text-white px-3 py-1 sm:px-5 sm:py-2 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest shadow-xl border border-white/20 backdrop-blur-sm">
                     {badge}
                 </div>
             ))}
             {isADeal && (
-                 <div className="bg-white/90 backdrop-blur-md text-[#FF5C00] px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg border border-orange-100">
+                 <div className="bg-white/90 backdrop-blur-md text-[#FF5C00] px-3 py-1 sm:px-5 sm:py-2 rounded-full text-[8px] sm:text-[10px] font-black uppercase tracking-widest shadow-lg border border-orange-100">
                     {item.isFeatured ? "Featured Deal" : item.isDeal ? "Combo Deal" : "Special Offer"}
                 </div>
             )}
@@ -403,12 +403,12 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
         </div>
 
         {/* Content Area */}
-        <div className="p-5 sm:p-8 flex flex-col flex-1">
+        <div className="p-3 sm:p-8 flex flex-col flex-1">
           <div className="mb-6">
-            <h3 className="font-black text-2xl text-gray-900 uppercase tracking-tighter leading-none mb-3 group-hover:text-[#FF5C00] transition-colors min-h-[2rem]">
+            <h3 className="font-black text-base sm:text-2xl text-gray-900 uppercase tracking-tighter leading-none mb-2 sm:mb-3 group-hover:text-[#FF5C00] transition-colors min-h-[2rem]">
               {item.name}
             </h3>
-            <p className="text-gray-500 text-sm font-medium line-clamp-2 leading-relaxed h-10 mb-6">
+            <p className="text-gray-500 text-xs sm:text-sm font-medium line-clamp-2 leading-relaxed h-8 sm:h-10 mb-4 sm:mb-6">
               {item.description}
             </p>
 
@@ -437,9 +437,9 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
           {/* Footer Area - Perfectly Centered and Pinned */}
           <div className="mt-auto pt-6 border-t border-orange-100/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
             <div className="flex flex-col justify-center">
-              <span className="text-[9px] font-black text-orange-400 uppercase tracking-[0.2em] mb-1 block">Starting at</span>
+              <span className="text-[8px] sm:text-[9px] font-black text-orange-400 uppercase tracking-[0.2em] mb-1 block">Starting at</span>
               <div className="flex items-baseline gap-2">
-                <span className="text-3xl font-black text-[#FF5C00] tracking-tighter leading-none">
+                <span className="text-xl sm:text-3xl font-black text-[#FF5C00] tracking-tighter leading-none">
                   Rs. {item.price?.toFixed(0) || "0"}
                 </span>
                 {item.originalPrice && item.originalPrice > item.price && (
@@ -455,7 +455,7 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
                 onClick={(e) => { e.stopPropagation(); handleAddToCart(item); }}
                 disabled={isAdding || cartState.isLoading}
                 className={`
-                  w-full sm:w-auto h-12 sm:h-14 px-6 sm:px-8 rounded-full flex items-center justify-center gap-2 sm:gap-3 transition-all duration-300 shadow-xl
+                  w-full sm:w-auto h-10 sm:h-14 px-4 sm:px-8 rounded-full flex items-center justify-center gap-1 sm:gap-3 transition-all duration-300 shadow-xl
                   ${isAdding
                     ? "bg-orange-100 text-[#FF5C00] scale-95"
                     : "bg-[#FF5C00] text-white hover:bg-[#E65200] shadow-orange-200 active:scale-95"
