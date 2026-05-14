@@ -181,14 +181,14 @@ export default function MenuPage() {
               <div className="absolute bottom-0 left-0 w-96 h-96 bg-black rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2" />
             </div>
             
-            <div className="px-12 md:px-24 w-full relative z-10">
+            <div className="px-6 md:px-12 lg:px-24 w-full relative z-10">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8 }}
                 className="max-w-2xl"
               >
-                <h1 className="text-5xl md:text-7xl font-black text-white mb-6 tracking-tighter leading-[0.9] drop-shadow-2xl">
+                <h1 className="text-4xl md:text-5xl lg:text-7xl font-black text-white mb-4 sm:mb-6 tracking-tighter leading-[0.9] drop-shadow-2xl">
                   Welcome back,<br />
                   <span className="text-white/80">{authUser?.name?.split(' ')[0] || 'Foodie'}!</span>
                 </h1>

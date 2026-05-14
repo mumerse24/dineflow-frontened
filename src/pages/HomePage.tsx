@@ -123,13 +123,13 @@ export default function HomePage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
         
         {/* 👋 Welcome & Search Section */}
-        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-600 p-8 sm:p-12 shadow-2xl">
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
+        <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-amber-500 to-orange-600 p-6 md:p-8 lg:p-12 shadow-2xl">
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6 md:gap-8">
             <div className="space-y-4 max-w-xl text-white">
               <motion.h1 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="text-4xl sm:text-5xl font-black tracking-tight"
+                className="text-3xl md:text-5xl font-black tracking-tight"
               >
                 Welcome back, {user?.name?.split(" ")[0] || "Foodie"}!
               </motion.h1>

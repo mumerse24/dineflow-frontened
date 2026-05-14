@@ -403,7 +403,7 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
         </div>
 
         {/* Content Area */}
-        <div className="p-8 flex flex-col flex-1">
+        <div className="p-5 sm:p-8 flex flex-col flex-1">
           <div className="mb-6">
             <h3 className="font-black text-2xl text-gray-900 uppercase tracking-tighter leading-none mb-3 group-hover:text-[#FF5C00] transition-colors min-h-[2rem]">
               {item.name}
@@ -435,7 +435,7 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
           </div>
 
           {/* Footer Area - Perfectly Centered and Pinned */}
-          <div className="mt-auto pt-6 border-t border-orange-100/50 flex items-center justify-between">
+          <div className="mt-auto pt-6 border-t border-orange-100/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 sm:gap-0">
             <div className="flex flex-col justify-center">
               <span className="text-[9px] font-black text-orange-400 uppercase tracking-[0.2em] mb-1 block">Starting at</span>
               <div className="flex items-baseline gap-2">
@@ -455,7 +455,7 @@ export default function RestaurantMenu({ filters, onEdit }: RestaurantMenuProps)
                 onClick={(e) => { e.stopPropagation(); handleAddToCart(item); }}
                 disabled={isAdding || cartState.isLoading}
                 className={`
-                  h-14 px-8 rounded-full flex items-center justify-center gap-3 transition-all duration-300 shadow-xl
+                  w-full sm:w-auto h-12 sm:h-14 px-6 sm:px-8 rounded-full flex items-center justify-center gap-2 sm:gap-3 transition-all duration-300 shadow-xl
                   ${isAdding
                     ? "bg-orange-100 text-[#FF5C00] scale-95"
                     : "bg-[#FF5C00] text-white hover:bg-[#E65200] shadow-orange-200 active:scale-95"
