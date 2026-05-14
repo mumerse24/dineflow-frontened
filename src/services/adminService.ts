@@ -258,11 +258,7 @@ export const adminService = {
     const formData = new FormData()
     formData.append("image", file)
 
-    const response = await api.post<ApiResponse<{ imageUrl: string }>>("/upload", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data"
-      }
-    })
+    const response = await api.post<ApiResponse<{ imageUrl: string }>>("/upload", formData)
     return response.data
   },
 
