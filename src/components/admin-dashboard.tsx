@@ -179,7 +179,7 @@ export function AdminDashboard() {
     dispatch(fetchAllOrders({ limit: 20, page: 1 }))
     dispatch(fetchUsers({ limit: 100 }))
     dispatch(fetchRiders({ limit: 50 }))
-    dispatch(fetchAllMenuItems())
+    dispatch(fetchAllMenuItems({ limit: 1000 }))
     dispatch(fetchFeedbackStats())
     dispatch(fetchComplaints())
   }
