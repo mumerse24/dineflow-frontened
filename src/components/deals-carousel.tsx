@@ -128,17 +128,17 @@ export function DealsCarousel() {
                             />
 
                             {/* Info Overlay (Price and Name) */}
-                            <div className="absolute bottom-8 left-8 z-20 text-white max-w-lg">
+                            <div className="absolute bottom-4 left-4 md:bottom-8 md:left-8 z-20 text-white max-w-[80%] md:max-w-lg">
                                 <motion.div
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: 0.3 }}
                                 >
-                                    <h3 className="text-3xl md:text-4xl font-black mb-2 drop-shadow-lg uppercase tracking-tighter">
+                                    <h3 className="text-2xl md:text-4xl font-black mb-1 md:mb-2 drop-shadow-lg uppercase tracking-tighter">
                                         {deals[currentIndex].name}
                                     </h3>
-                                    <div className="flex items-center gap-4">
-                                        <div className="bg-amber-500 text-white px-6 py-2 rounded-full text-2xl font-black shadow-xl border-2 border-white/20">
+                                    <div className="flex items-center gap-2 md:gap-4">
+                                        <div className="bg-amber-500 text-white px-4 py-1 md:px-6 md:py-2 rounded-full text-lg md:text-2xl font-black shadow-xl border-2 border-white/20">
                                             Rs. {deals[currentIndex].price}
                                         </div>
                                         {deals[currentIndex].originalPrice && deals[currentIndex].originalPrice > deals[currentIndex].price && (
@@ -162,9 +162,9 @@ export function DealsCarousel() {
                                         <motion.div
                                             whileHover={{ scale: 1.1 }}
                                             whileTap={{ scale: 0.9 }}
-                                            className="bg-amber-600 text-white px-10 py-5 rounded-full text-2xl font-black shadow-2xl flex items-center gap-3 transform transition-all border-4 border-white/30"
+                                            className="bg-amber-600 text-white px-6 py-3 md:px-10 md:py-5 rounded-full text-lg md:text-2xl font-black shadow-2xl flex items-center gap-2 md:gap-3 transform transition-all border-2 md:border-4 border-white/30"
                                         >
-                                            <ShoppingCart className="w-8 h-8" />
+                                            <ShoppingCart className="w-6 h-6 md:w-8 md:h-8" />
                                             ORDER NOW
                                         </motion.div>
                                     )}
